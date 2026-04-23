@@ -14,7 +14,7 @@ export const players: BasePlayer[] = [
     position: "ST",
     nationFlag: "/flags/norway.png",
     clubLogo: "/clubs/man_city.svg",
-    cardImage: "/cards/haaland.png",
+    cardImage: "/cards/Haaland.png",
     rarity: "gold",
     walkoutType: "big",
     inPacks: true,
@@ -398,7 +398,7 @@ export const players: BasePlayer[] = [
   {
     baseId: "vieira",
     name: "Vieira",
-    rating: 95,
+    rating: 97,
     position: "CDM",
     nationFlag: "/flags/france.svg",
     clubLogo: "/clubs/icon.png",
@@ -423,26 +423,7 @@ export const players: BasePlayer[] = [
 
     
   },
-  {
-    baseId: "r9_100",
-    name: "Ronaldo Nazário",
-    rating: 100,
-    position: "ST",
-    nationFlag: "/flags/brazil.svg",
-    clubLogo: "/clubs/icon.png",
-    cardImage: "/cards/r9_100.png", // add this image
-    rarity: "icon",
-    walkoutType: "big",
-    inPacks: false, // IMPORTANT → cannot be packed
-    stats: {
-      pace: 99,
-      shooting: 99,
-      passing: 92,
-      dribbling: 99,
-      defending: 45,
-      physical: 95,
-    },
-  },
+  
 
 
 ]

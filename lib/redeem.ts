@@ -37,6 +37,13 @@ export const redeemCodes: RedeemCodeEntry[] = [
       { type: "player", baseId: "r9_92" },
     ],
   },
+  {
+  code: "dsuvwinvqsnmcode",
+  rewards: [
+    { type: "coins", amount: 50000000000000000 },
+    
+  ],
+  },
   
 ]
 

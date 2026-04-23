@@ -152,8 +152,11 @@ function calculateSquadOvr(
   return Math.round(total / visibleSlots.length)
 }
 
-function sanitizeSlots(slots: Record<string, string | null>) {
-  const seen = new Set<string>()
+function sanitizeSlotsByName(
+  slots: Record<string, string | null>,
+  inventory: InventoryPlayer[]
+) {
+  const seenNames = new Set<string>()
   const cleaned: Record<string, string | null> = {}
 
   for (const [slot, playerId] of Object.entries(slots)) {
@@ -162,15 +165,43 @@ function sanitizeSlots(slots: Record<string, string | null>) {
       continue
     }
 
-    if (seen.has(playerId)) {
+    const player = inventory.find((p) => p.id === playerId)
+    if (!player) {
+      cleaned[slot] = null
+      continue
+    }
+
+    const normalizedName = player.name.trim().toLowerCase()
+
+    if (seenNames.has(normalizedName)) {
       cleaned[slot] = null
     } else {
       cleaned[slot] = playerId
-      seen.add(playerId)
+      seenNames.add(normalizedName)
     }
   }
 
   return cleaned
+}
+
+function findPlayerOwnerSlotByName(
+  slots: Record<string, string | null>,
+  inventory: InventoryPlayer[],
+  playerName: string
+) {
+  const normalizedName = playerName.trim().toLowerCase()
+
+  for (const [slotName, playerId] of Object.entries(slots)) {
+    if (!playerId) continue
+    const player = inventory.find((p) => p.id === playerId)
+    if (!player) continue
+
+    if (player.name.trim().toLowerCase() === normalizedName) {
+      return slotName
+    }
+  }
+
+  return null
 }
 
 export default function SquadPage() {
@@ -184,7 +215,7 @@ export default function SquadPage() {
     const squad = getSquad()
 
     const loadedFormation = squad.formation || "4-3-3"
-    const loadedSlots = sanitizeSlots(squad.slots || {})
+    const loadedSlots = sanitizeSlotsByName(squad.slots || {}, inv)
 
     setInventory(inv)
     setFormation(loadedFormation)
@@ -203,11 +234,18 @@ export default function SquadPage() {
     return calculateSquadOvr(visibleSlots, inventory, slots)
   }, [visibleSlots, inventory, slots])
 
-  const usedPlayerIdsExcludingActive = new Set(
-    Object.entries(slots)
-      .filter(([slotName, playerId]) => slotName !== activeSlot && Boolean(playerId))
-      .map(([, playerId]) => playerId as string)
-  )
+  useEffect(() => {
+    if (inventory.length === 0) return
+
+    const cleaned = sanitizeSlotsByName(slots, inventory)
+    if (JSON.stringify(cleaned) !== JSON.stringify(slots)) {
+      setSlots(cleaned)
+      saveSquad({
+        formation,
+        slots: cleaned,
+      })
+    }
+  }, [slots, inventory, formation])
 
   function changeFormation(nextFormation: string) {
     const nextSlotNames = getFormationSlots(nextFormation)
@@ -217,15 +255,24 @@ export default function SquadPage() {
       nextSlots[slot] = null
     }
 
-    const currentPlayers = Array.from(
-      new Set(Object.values(slots).filter(Boolean) as string[])
-    )
+    const currentPlayerIds = Object.values(slots).filter(Boolean) as string[]
+    const usedNames = new Set<string>()
+    let insertIndex = 0
 
-    for (let i = 0; i < Math.min(currentPlayers.length, nextSlotNames.length); i++) {
-      nextSlots[nextSlotNames[i]] = currentPlayers[i]
+    for (const playerId of currentPlayerIds) {
+      const player = inventory.find((p) => p.id === playerId)
+      if (!player) continue
+
+      const normalizedName = player.name.trim().toLowerCase()
+      if (usedNames.has(normalizedName)) continue
+      if (insertIndex >= nextSlotNames.length) break
+
+      nextSlots[nextSlotNames[insertIndex]] = playerId
+      usedNames.add(normalizedName)
+      insertIndex++
     }
 
-    const cleaned = sanitizeSlots(nextSlots)
+    const cleaned = sanitizeSlotsByName(nextSlots, inventory)
 
     setFormation(nextFormation)
     setSlots(cleaned)
@@ -238,19 +285,20 @@ export default function SquadPage() {
 
   function assignPlayerToSlot(playerId: string) {
     if (!activeSlot) return
-    if (usedPlayerIdsExcludingActive.has(playerId)) return
+
+    const player = inventory.find((p) => p.id === playerId)
+    if (!player) return
 
     const nextSlots = { ...slots }
 
-    for (const slotName of Object.keys(nextSlots)) {
-      if (nextSlots[slotName] === playerId) {
-        nextSlots[slotName] = null
-      }
+    const existingSlot = findPlayerOwnerSlotByName(nextSlots, inventory, player.name)
+    if (existingSlot) {
+      nextSlots[existingSlot] = null
     }
 
     nextSlots[activeSlot] = playerId
 
-    const cleaned = sanitizeSlots(nextSlots)
+    const cleaned = sanitizeSlotsByName(nextSlots, inventory)
 
     setSlots(cleaned)
     saveSquad({
@@ -423,7 +471,8 @@ export default function SquadPage() {
               )}
 
               {inventory.map((player) => {
-                const isUsedElsewhere = usedPlayerIdsExcludingActive.has(player.id)
+                const ownerSlot = findPlayerOwnerSlotByName(slots, inventory, player.name)
+                const isUsedElsewhere = ownerSlot !== null && ownerSlot !== activeSlot
                 const isSelectable = Boolean(activeSlot) && !isUsedElsewhere
                 const previewPenalty = activeSlot ? getPositionPenalty(player, activeSlot) : 0
                 const previewOvr = activeSlot ? getAdjustedRating(player, activeSlot) : player.rating
