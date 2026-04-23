@@ -4,21 +4,18 @@ import { useEffect, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {
-  addMarketListing,
   getInventory,
-  getMarketListings,
   getUserData,
-  removeMarketListing,
-  removePlayerFromInventory,
   saveInventory,
   saveUserData,
   type InventoryPlayer,
   type MarketListing,
 } from "@/lib/storage"
 import {
+  buyAiMarketPlayer,
   getMarketBuyPrice,
   getQuickSellPrice,
-  getSuggestedSellPrice,
+  quickSellPlayer,
   refreshAiMarket,
 } from "@/lib/market"
 
@@ -77,7 +74,7 @@ export default function MarketPage() {
     return () => window.clearInterval(interval)
   }, [])
 
-  function quickSell(player: InventoryPlayer) {
+  function handleQuickSell(player: InventoryPlayer) {
     const value = getQuickSellPrice(player)
     const user = getUserData()
 
@@ -86,36 +83,12 @@ export default function MarketPage() {
       coins: user.coins + value,
     })
 
-    removePlayerFromInventory(player.id)
-    refreshAll()
-  }
-
-  function listOnMarket(player: InventoryPlayer) {
-    const price = getSuggestedSellPrice(player)
-    const listedAt = Date.now()
-
-    const expiresAt =
-      player.rarity === "gold"
-        ? listedAt + 15_000
-        : player.rarity === "elite"
-        ? listedAt + 60_000
-        : listedAt + 300_000
-
-    addMarketListing({
-      listingId: `${player.id}-listing`,
-      player,
-      price,
-      listedAt,
-      expiresAt,
-      sellerType: "user",
-    })
-
-    removePlayerFromInventory(player.id)
+    quickSellPlayer(player.id)
     refreshAll()
   }
 
   function buyFromMarket(listingId: string) {
-    const listing = getMarketListings().find((l) => l.listingId === listingId)
+    const listing = market.find((l) => l.listingId === listingId)
     if (!listing) return
 
     const user = getUserData()
@@ -134,7 +107,7 @@ export default function MarketPage() {
     currentInventory.push(listing.player)
     saveInventory(currentInventory)
 
-    removeMarketListing(listingId)
+    buyAiMarketPlayer(listingId)
     refreshAll()
   }
 
@@ -160,9 +133,9 @@ export default function MarketPage() {
             <p className="text-sm uppercase tracking-[0.35em] text-cyan-300">
               Transfer Market
             </p>
-            <h1 className="text-3xl font-black">Buy and Sell Cards</h1>
+            <h1 className="text-3xl font-black">Buy and Quick Sell</h1>
             <p className="mt-1 text-slate-300">
-              AI listings expire automatically by rarity.
+              AI listings only. Prices are fixed by rarity.
             </p>
           </div>
 
@@ -190,7 +163,7 @@ export default function MarketPage() {
             <div className="mt-6 space-y-3">
               {inventory.length === 0 && (
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-slate-400">
-                  No cards to sell.
+                  No cards in inventory.
                 </div>
               )}
 
@@ -220,32 +193,24 @@ export default function MarketPage() {
                         {player.position} • {player.rating}
                       </div>
                       <div className="mt-1 text-xs text-slate-500">
-                        Quick sell: {getQuickSellPrice(player)} • Market: {getMarketBuyPrice(player)}
+                        Quick sell: {getQuickSellPrice(player)} • AI market value: {getMarketBuyPrice(player)}
                       </div>
                     </div>
                   </button>
 
-                  <div className="flex flex-col gap-2">
-                    <button
-                      onClick={() => quickSell(player)}
-                      className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-bold text-red-200"
-                    >
-                      Quick Sell
-                    </button>
-                    <button
-                      onClick={() => listOnMarket(player)}
-                      className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950"
-                    >
-                      List
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => handleQuickSell(player)}
+                    className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-bold text-red-200"
+                  >
+                    Quick Sell
+                  </button>
                 </div>
               ))}
             </div>
           </section>
 
           <section className="rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <h2 className="text-2xl font-black">Market Listings</h2>
+            <h2 className="text-2xl font-black">AI Market Listings</h2>
 
             <div className="mt-6 space-y-3">
               {market.length === 0 && (
@@ -276,15 +241,14 @@ export default function MarketPage() {
                         {listing.price} coins
                       </div>
                       <div className="mt-1 text-xs text-slate-400">
-                        {listing.sellerType === "ai" ? "AI Listing" : "Your Listing"} •{" "}
-                        {formatTime(listing.expiresAt - now)}
+                        AI Listing • {formatTime(listing.expiresAt - now)}
                       </div>
                     </div>
                   </div>
 
                   <button
                     onClick={() => buyFromMarket(listing.listingId)}
-                    className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-0"
+                    className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950"
                   >
                     Buy
                   </button>
@@ -319,6 +283,9 @@ export default function MarketPage() {
                     </div>
                     <div className="mt-2 text-sm text-slate-500">
                       {selectedPlayer.rarity.toUpperCase()}
+                    </div>
+                    <div className="mt-2 text-sm text-yellow-300">
+                      Quick Sell: {getQuickSellPrice(selectedPlayer)}
                     </div>
                   </div>
                 </div>

@@ -1,105 +1,110 @@
-import { players } from "./players"
 import {
+  getInventory,
   getMarketListings,
+  saveInventory,
   saveMarketListings,
   type InventoryPlayer,
   type MarketListing,
-} from "./storage"
+} from "@/lib/storage"
+import { getRandomPlayerForPack } from "@/lib/players"
 
-const MARKET_REFRESH_MS = 5 * 60 * 1000
-const TARGET_AI_LISTINGS = 12
+const AI_MARKET_REFRESH_MS = 5 * 60 * 1000
+const AI_MARKET_SIZE = 8
 
-function randomBetween(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min + 1)) + min
+export function getQuickSellPrice(player: InventoryPlayer): number {
+  if (player.rarity === "icon") return 90000
+  if (player.rarity === "elite") return 19000
+  return 9000
 }
 
-function getQuickSellPrice(player: InventoryPlayer) {
-  if (player.rarity === "icon") return randomBetween(190000, 230000)
-  if (player.rarity === "elite") return randomBetween(30000, 43000)
-  return randomBetween(11000, 23000)
+export function getMarketBuyPrice(player: InventoryPlayer): number {
+  if (player.rarity === "icon") return 243000
+  if (player.rarity === "elite") return 31000
+  return 19000
 }
 
-export { getQuickSellPrice }
-
-export function getSuggestedSellPrice(player: InventoryPlayer) {
-  if (player.rarity === "icon") return randomBetween(190000, 230000)
-  if (player.rarity === "elite") return randomBetween(30000, 43000)
-  return randomBetween(11000, 23000)
+function getAiExpiryTime(rarity: InventoryPlayer["rarity"]) {
+  if (rarity === "icon") return 5 * 60 * 1000
+  if (rarity === "elite") return 60 * 1000
+  return 15 * 1000
 }
 
-export function getMarketBuyPrice(player: InventoryPlayer) {
-  if (player.rarity === "icon") return randomBetween(190000, 230000)
-  if (player.rarity === "elite") return randomBetween(30000, 43000)
-  return randomBetween(11000, 23000)
-}
-
-function getRandomRarity(): "gold" | "elite" | "icon" {
-  const roll = Math.random()
-
-  if (roll < 0.01) return "icon"
-  if (roll < 0.11) return "elite"
-  return "gold"
-}
-
-function makeAI(base: Omit<InventoryPlayer, "id">): InventoryPlayer {
-  return {
-    ...base,
-    id: `${base.baseId}-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
-  }
-}
-
-function createListing(base: Omit<InventoryPlayer, "id">): MarketListing {
+function makeAiListing(player: InventoryPlayer): MarketListing {
   const now = Date.now()
-  const player = makeAI(base)
 
   return {
-    listingId: player.id,
+    listingId: `ai-${player.id}-${now}-${Math.floor(Math.random() * 100000)}`,
     player,
     price: getMarketBuyPrice(player),
     listedAt: now,
-    expiresAt: now + MARKET_REFRESH_MS,
+    expiresAt: now + getAiExpiryTime(player.rarity),
     sellerType: "ai",
   }
 }
 
-export function refreshAiMarket() {
-  const now = Date.now()
+function makeInventoryCardFromBasePlayer(basePlayer: any): InventoryPlayer {
+  return {
+    id: `${basePlayer.baseId}-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+    baseId: basePlayer.baseId,
+    name: basePlayer.name,
+    rating: basePlayer.rating,
+    position: basePlayer.position,
+    altPositions: basePlayer.altPositions ?? [],
+    nationFlag: basePlayer.nationFlag,
+    clubLogo: basePlayer.clubLogo,
+    cardImage: basePlayer.cardImage,
+    rarity: basePlayer.rarity,
+    walkoutType: basePlayer.walkoutType,
+    skill: basePlayer.skill,
+    stats: basePlayer.stats,
+    inPacks: basePlayer.inPacks,
+  }
+}
 
-  let listings = getMarketListings().filter(
-    (listing) => listing.sellerType === "user" || listing.expiresAt > now
+function makeAiPlayer(): InventoryPlayer {
+  const packRoll = Math.random()
+
+  let packType: "bronze" | "gold" | "elite" = "bronze"
+
+  if (packRoll < 0.01) {
+    packType = "elite"
+  } else if (packRoll < 0.11) {
+    packType = "gold"
+  } else {
+    packType = "bronze"
+  }
+
+  const basePlayer = getRandomPlayerForPack(packType)
+  return makeInventoryCardFromBasePlayer(basePlayer)
+}
+
+export function refreshAiMarket(): MarketListing[] {
+  const now = Date.now()
+  const current = getMarketListings()
+
+  const validAiListings = current.filter(
+    (listing) => listing.sellerType === "ai" && listing.expiresAt > now
   )
 
-  const aiListings = listings.filter((listing) => listing.sellerType === "ai")
+  let listings = [...validAiListings]
 
-  if (aiListings.length < TARGET_AI_LISTINGS) {
-    const packPool = players.filter((p) => p.inPacks !== false)
-
-    const goldPool = packPool.filter((p) => p.rarity === "gold")
-    const elitePool = packPool.filter((p) => p.rarity === "elite")
-    const iconPool = packPool.filter((p) => p.rarity === "icon")
-
-    const missing = TARGET_AI_LISTINGS - aiListings.length
-
-    for (let i = 0; i < missing; i++) {
-      const rarity = getRandomRarity()
-
-      let chosenPool: Omit<InventoryPlayer, "id">[] = goldPool
-
-      if (rarity === "icon" && iconPool.length > 0) {
-        chosenPool = iconPool
-      } else if (rarity === "elite" && elitePool.length > 0) {
-        chosenPool = elitePool
-      }
-
-      const randomPlayer =
-        chosenPool[Math.floor(Math.random() * chosenPool.length)]
-
-      if (randomPlayer) {
-        listings.push(createListing(randomPlayer))
-      }
-    }
+  while (listings.length < AI_MARKET_SIZE) {
+    listings.push(makeAiListing(makeAiPlayer()))
   }
 
   saveMarketListings(listings)
   return listings
+}
+
+export function buyAiMarketPlayer(listingId: string): MarketListing[] {
+  const listings = getMarketListings()
+  const updated = listings.filter((listing) => listing.listingId !== listingId)
+  saveMarketListings(updated)
+  return updated
+}
+
+export function quickSellPlayer(playerId: string): InventoryPlayer[] {
+  const inventory = getInventory().filter((player) => player.id !== playerId)
+  saveInventory(inventory)
+  return inventory
 }
