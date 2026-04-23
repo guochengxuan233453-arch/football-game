@@ -124,6 +124,16 @@ export default function Home() {
                 Upgrade specific players into stronger cards.
               </p>
             </Link>
+          <Link
+              href="/redeem"
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 transition hover:bg-white/10"
+            >
+              <div className="text-4xl">🎟️</div>
+              <h2 className="mt-4 text-2xl font-black">Redeem</h2>
+              <p className="mt-2 text-slate-300">
+                Enter a code for coins and players.
+              </p>
+            </Link>
 
         </div>
 

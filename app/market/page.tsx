@@ -13,6 +13,7 @@ import {
   saveInventory,
   saveUserData,
   type InventoryPlayer,
+  type MarketListing,
 } from "@/lib/storage"
 import {
   getMarketBuyPrice,
@@ -44,10 +45,11 @@ function getDisplayStats(player: InventoryPlayer) {
 
 export default function MarketPage() {
   const [inventory, setInventory] = useState<InventoryPlayer[]>([])
-  const [market, setMarket] = useState(getMarketListings())
-  const [coins, setCoins] = useState(getUserData().coins)
+  const [market, setMarket] = useState<MarketListing[]>([])
+  const [coins, setCoins] = useState(0)
   const [selectedPlayer, setSelectedPlayer] = useState<InventoryPlayer | null>(null)
   const [now, setNow] = useState(Date.now())
+  const [mounted, setMounted] = useState(false)
 
   function refreshAll() {
     const refreshed = refreshAiMarket()
@@ -57,15 +59,14 @@ export default function MarketPage() {
     setMarket(refreshed)
     setCoins(getUserData().coins)
 
-    if (selectedPlayer) {
-      const updatedSelected = inv.find((p) => p.id === selectedPlayer.id) ?? null
-      setSelectedPlayer(updatedSelected)
-    } else {
-      setSelectedPlayer(inv[0] ?? null)
-    }
+    setSelectedPlayer((prev) => {
+      if (!prev) return inv[0] ?? null
+      return inv.find((p) => p.id === prev.id) ?? inv[0] ?? null
+    })
   }
 
   useEffect(() => {
+    setMounted(true)
     refreshAll()
 
     const interval = window.setInterval(() => {
@@ -138,6 +139,18 @@ export default function MarketPage() {
   }
 
   const stats = selectedPlayer ? getDisplayStats(selectedPlayer) : null
+
+  if (!mounted) {
+    return (
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.10),transparent_20%),linear-gradient(to_bottom,#020617,#000000)] text-white">
+        <div className="mx-auto max-w-7xl px-6 py-8">
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+            Loading market...
+          </div>
+        </div>
+      </main>
+    )
+  }
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.10),transparent_20%),linear-gradient(to_bottom,#020617,#000000)] text-white">
