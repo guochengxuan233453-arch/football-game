@@ -48,6 +48,8 @@ export default function MarketPage() {
   const [now, setNow] = useState(Date.now())
   const [mounted, setMounted] = useState(false)
 
+  const [confirmQuickSellPlayer, setConfirmQuickSellPlayer] = useState<InventoryPlayer | null>(null)
+
   function refreshAll() {
     const refreshed = refreshAiMarket()
     const inv = getInventory()
@@ -74,7 +76,7 @@ export default function MarketPage() {
     return () => window.clearInterval(interval)
   }, [])
 
-  function handleQuickSell(player: InventoryPlayer) {
+  function doQuickSell(player: InventoryPlayer) {
     const value = getQuickSellPrice(player)
     const user = getUserData()
 
@@ -84,7 +86,17 @@ export default function MarketPage() {
     })
 
     quickSellPlayer(player.id)
+    setConfirmQuickSellPlayer(null)
     refreshAll()
+  }
+
+  function handleQuickSell(player: InventoryPlayer) {
+    if (player.rarity === "icon") {
+      setConfirmQuickSellPlayer(player)
+      return
+    }
+
+    doQuickSell(player)
   }
 
   function buyFromMarket(listingId: string) {
@@ -135,7 +147,7 @@ export default function MarketPage() {
             </p>
             <h1 className="text-3xl font-black">Buy and Quick Sell</h1>
             <p className="mt-1 text-slate-300">
-              AI listings only. Prices are fixed by rarity.
+              AI market only. Fixed prices by rarity. Market refreshes every 2 minutes.
             </p>
           </div>
 
@@ -211,6 +223,10 @@ export default function MarketPage() {
 
           <section className="rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur">
             <h2 className="text-2xl font-black">AI Market Listings</h2>
+
+            <div className="mt-2 text-sm text-slate-400">
+              Spawn chances: Gold 79% • Elite 20% • Icon 1%
+            </div>
 
             <div className="mt-6 space-y-3">
               {market.length === 0 && (
@@ -318,6 +334,33 @@ export default function MarketPage() {
           </aside>
         </div>
       </div>
+
+      {confirmQuickSellPlayer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-slate-950 p-6 text-center shadow-2xl">
+            <p className="text-sm uppercase tracking-[0.35em] text-red-300">Confirm Quick Sell</p>
+            <h2 className="mt-3 text-3xl font-black">{confirmQuickSellPlayer.name}</h2>
+            <p className="mt-3 text-slate-300">
+              Are you sure you want to quick sell this icon for {getQuickSellPrice(confirmQuickSellPlayer)} coins?
+            </p>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setConfirmQuickSellPlayer(null)}
+                className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 font-bold hover:bg-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => doQuickSell(confirmQuickSellPlayer)}
+                className="flex-1 rounded-2xl bg-red-500 px-4 py-3 font-black text-white"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

@@ -6,9 +6,9 @@ import {
   type InventoryPlayer,
   type MarketListing,
 } from "@/lib/storage"
-import { getRandomPlayerForPack } from "@/lib/players"
+import { players } from "@/lib/players"
 
-const AI_MARKET_REFRESH_MS = 5 * 60 * 1000
+const AI_MARKET_REFRESH_MS = 2 * 60 * 1000
 const AI_MARKET_SIZE = 8
 
 export function getQuickSellPrice(player: InventoryPlayer): number {
@@ -61,32 +61,54 @@ function makeInventoryCardFromBasePlayer(basePlayer: any): InventoryPlayer {
   }
 }
 
+function rollMarketRarity(): "gold" | "elite" | "icon" {
+  const r = Math.random()
+
+  if (r < 0.01) return "icon"
+  if (r < 0.21) return "elite"
+  return "gold"
+}
+
 function makeAiPlayer(): InventoryPlayer {
-  const packRoll = Math.random()
+  const rarity = rollMarketRarity()
 
-  let packType: "bronze" | "gold" | "elite" = "bronze"
+  const pool = players.filter(
+    (player) => player.rarity === rarity && player.inPacks !== false
+  )
 
-  if (packRoll < 0.01) {
-    packType = "elite"
-  } else if (packRoll < 0.11) {
-    packType = "gold"
-  } else {
-    packType = "bronze"
+  if (pool.length === 0) {
+    const fallbackPool = players.filter((player) => player.inPacks !== false)
+
+    if (fallbackPool.length === 0) {
+      throw new Error("No valid market players found.")
+    }
+
+    const fallback = fallbackPool[Math.floor(Math.random() * fallbackPool.length)]
+    return makeInventoryCardFromBasePlayer(fallback)
   }
 
-  const basePlayer = getRandomPlayerForPack(packType)
-  return makeInventoryCardFromBasePlayer(basePlayer)
+  const chosen = pool[Math.floor(Math.random() * pool.length)]
+  return makeInventoryCardFromBasePlayer(chosen)
+}
+
+function shouldFullRefresh(listings: MarketListing[]) {
+  if (listings.length === 0) return true
+
+  const newestListedAt = Math.max(...listings.map((listing) => listing.listedAt))
+  return Date.now() - newestListedAt >= AI_MARKET_REFRESH_MS
 }
 
 export function refreshAiMarket(): MarketListing[] {
   const now = Date.now()
   const current = getMarketListings()
 
-  const validAiListings = current.filter(
+  let listings = current.filter(
     (listing) => listing.sellerType === "ai" && listing.expiresAt > now
   )
 
-  let listings = [...validAiListings]
+  if (shouldFullRefresh(listings)) {
+    listings = []
+  }
 
   while (listings.length < AI_MARKET_SIZE) {
     listings.push(makeAiListing(makeAiPlayer()))
