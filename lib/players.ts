@@ -523,9 +523,29 @@ export const players: BasePlayer[] = [
       defending: 45,
       physical: 80,
     }
-  }
+  },
 
-  
+  {
+    baseId: "torres_99",
+    name: "FernandoTorres",
+    rating: 99,
+    position: "ST",
+    nationFlag: "/flags/spain.png",
+    clubLogo: "/clubs/icon.png",
+    cardImage: "/cards/torres_99.png",
+    rarity: "icon",
+    walkoutType: "big",
+    inPacks: false,
+    stats: {
+      pace: 99,
+      shooting: 92,
+      passing: 74,
+      dribbling: 96,
+      defending: 45,
+      physical: 87,
+    }
+  },
+
 
 
 ]
@@ -582,10 +602,17 @@ export function rollRarity(packType: PackType): "gold" | "elite" | "icon" {
 
 export function getRandomPlayerForPack(packType: PackType): BasePlayer {
   const rarity = rollRarity(packType)
-  const pool = players.filter((player) => player.rarity === rarity)
+
+  const pool = players.filter(
+    (player) =>
+      player.rarity === rarity &&
+      player.inPacks !== false // 👈 THIS FIX
+  )
 
   if (pool.length === 0) {
-    return players[0]
+    // fallback to ANY packable player
+    const fallback = players.filter((p) => p.inPacks !== false)
+    return fallback[Math.floor(Math.random() * fallback.length)]
   }
 
   return pool[Math.floor(Math.random() * pool.length)]
