@@ -27,6 +27,10 @@ export const redeemCodes: RedeemCodeEntry[] = [
     rewards: [{ type: "player", baseId: "zidane_icon" }],
   },
   {
+    code: "FREECOINS",
+    rewards: [{ type: "coins", amount: 5000000 }],
+  },
+  {
     code: "ronaldo92overall",
     rewards: [
       { type: "coins", amount: 500000 },
