@@ -33,13 +33,7 @@ export const redeemCodes: RedeemCodeEntry[] = [
       { type: "player", baseId: "r9_92" },
     ],
   },
-  {
-    code: "ronaldo100overall",
-    rewards: [
-      { type: "coins", amount: 500000000000 },
-      { type: "player", baseId: "r9_100" },
-    ],
-  },
+  
 ]
 
 function getUsedCodes(): string[] {
