@@ -5,6 +5,14 @@ export type PlayerStats = {
   dribbling: number
   defending: number
   physical: number
+
+  // 👇 NEW (optional so old players don’t break)
+  diving?: number
+  handling?: number
+  kicking?: number
+  reflexes?: number
+  speed?: number
+  positioning?: number
 }
 
 export type InventoryPlayer = {
@@ -21,6 +29,7 @@ export type InventoryPlayer = {
   walkoutType: "normal" | "big"
   stats?: PlayerStats
   inPacks?: boolean
+  skill?: string
 }
 
 export type UserData = {

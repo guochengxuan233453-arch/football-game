@@ -284,7 +284,7 @@ export default function MarketPage() {
 
                   <button
                     onClick={() => buyFromMarket(listing.listingId)}
-                    className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950"
+                    className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-0"
                   >
                     Buy
                   </button>

@@ -28,10 +28,10 @@ const exchangeRecipes: ExchangeRecipe[] = [
     id: "exchange_99_midfield",
     name: "Exchange 99 Zinedine Zidane",
     rewardOvr: 99,
-    description: "Trade 2 x 97 players and 1 x 96 player for a 99 midfielder.",
+    description: "Trade 10 x 97 players and 12 x 96 player for a 99 midfielder.",
     requirements: [
-      { rating: 97, count: 2 },
-      { rating: 96, count: 1 },
+      { rating: 97, count: 10 },
+      { rating: 96, count: 12 },
     ],
     rewards: [
       {
@@ -60,10 +60,10 @@ const exchangeRecipes: ExchangeRecipe[] = [
     id: "exchange_99_attack",
     name: "Exchange 99 Cristiano Ronaldo",
     rewardOvr: 99,
-    description: "Trade 2 x 97 players and 1 x 96 player for a 99 attacker.",
+    description: "Trade 9 x 97 players and 13 x 96 player for a 99 attacker.",
     requirements: [
-      { rating: 97, count: 2 },
-      { rating: 96, count: 1 },
+      { rating: 97, count: 9 },
+      { rating: 96, count: 13 },
     ],
     rewards: [
       {
@@ -92,10 +92,10 @@ const exchangeRecipes: ExchangeRecipe[] = [
     id: "exchange_99_winger",
     name: "Exchange 99 Lionel Messi",
     rewardOvr: 99,
-    description: "Trade 2 x 97 players and 1 x 96 player for a 99 winger.",
+    description: "Trade 11 x 97 players and 11 x 96 player for a 99 winger.",
     requirements: [
-      { rating: 97, count: 2 },
-      { rating: 96, count: 1 },
+      { rating: 97, count: 11 },
+      { rating: 96, count: 11 },
     ],
     rewards: [
       {
@@ -124,10 +124,10 @@ const exchangeRecipes: ExchangeRecipe[] = [
     id: "exchange_98_creator",
     name: "Exchange 98 Maldini",
     rewardOvr: 98,
-    description: "Trade 1 x 97 player and 1 x 96 player for a 98 creator.",
+    description: "Trade 2 x 97 player and 5 x 96 player for a 98 creator.",
     requirements: [
-      { rating: 97, count: 1 },
-      { rating: 96, count: 1 },
+      { rating: 97, count: 2 },
+      { rating: 96, count: 5 },
     ],
     rewards: [
       {
@@ -156,10 +156,10 @@ const exchangeRecipes: ExchangeRecipe[] = [
     id: "exchange_98_forward",
     name: "Exchange 98 Johan Cruyff",
     rewardOvr: 98,
-    description: "Trade 1 x 97 player and 1 x 96 player for a 98 forward.",
+    description: "Trade 3 x 97 player and 3 x 96 player for a 98 forward.",
     requirements: [
-      { rating: 97, count: 1 },
-      { rating: 96, count: 1 },
+      { rating: 97, count: 3 },
+      { rating: 96, count: 3 },
     ],
     rewards: [
       {

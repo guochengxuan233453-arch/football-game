@@ -28,9 +28,9 @@ const evoRecipes: EvoRecipe[] = [
     basePlayerBaseId: "gullit_95",
     basePlayerName: "Gullit",
     baseCardImage: "/cards/gullit_95.jpg",
-    costCoins: 1000000,
-    required97: 2,
-    required96: 3,
+    costCoins: 5000000,
+    required97: 15,
+    required96: 20,
     reward: {
       baseId: "gullit_evo_99",
       name: "Gullit",
@@ -44,10 +44,10 @@ const evoRecipes: EvoRecipe[] = [
       inPacks: false,
       stats: {
         pace: 99,
-        shooting: 99,
-        passing: 93,
+        shooting: 96,
+        passing: 99,
         dribbling: 98,
-        defending: 45,
+        defending: 92,
         physical: 96,
       },
     },
@@ -62,7 +62,7 @@ const evoRecipes: EvoRecipe[] = [
   required96: 30,
   reward: {
     baseId: "r9_100",
-    name: "Ronaldo Nazário",
+    name: "Ronaldo",
     rating: 100,
     position: "ST",
     nationFlag: "/flags/brazil.svg",
@@ -72,12 +72,14 @@ const evoRecipes: EvoRecipe[] = [
     walkoutType: "big",
     inPacks: false, // IMPORTANT → cannot be packed
     stats: {
-      pace: 99,
-      shooting: 99,
-      passing: 92,
-      dribbling: 99,
+      pace: 100,
+      shooting: 100,
+      passing: 84,
+      dribbling: 100,
       defending: 45,
-      physical: 95,
+      physical: 89,
+
+    
     },
   },
 },
@@ -202,7 +204,7 @@ export default function EvoPage() {
             <p className="text-sm uppercase tracking-[0.35em] text-purple-300">EVO</p>
             <h1 className="text-3xl font-black">Player Evolution</h1>
             <p className="mt-1 text-slate-300">
-              Upgrade a specific player into a 99 EVO card.
+              Upgrade a specific player into a 99/100 EVO card.
             </p>
           </div>
 
@@ -323,7 +325,7 @@ export default function EvoPage() {
               disabled={!canEvo}
               className="mt-6 w-full rounded-2xl bg-purple-400 px-6 py-4 font-black text-slate-950 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Evolve to 99
+              Evolve
             </button>
 
             {message && <p className="mt-4 text-slate-300">{message}</p>}

@@ -1,7 +1,8 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   getInventory,
   getSquad,
@@ -18,14 +19,46 @@ type MatchOption = {
   description: string
 }
 
-type SimResult = {
-  opponentName: string
-  userGoals: number
-  aiGoals: number
-  didWin: boolean
-  winRate: number
-  loseRate: number
-  reward: number
+type PlayerCardData = {
+  id: string
+  name: string
+  baseId?: string
+  rating: number
+  position: string
+  altPositions?: string[]
+  cardImage: string
+  skill?: string
+  stats: {
+    pace: number
+    shooting: number
+    passing: number
+    dribbling: number
+    defending: number
+    physical: number
+    diving: number
+    handling: number
+    reflexes: number
+    positioning: number
+  }
+}
+
+type DuelCard = {
+  hiddenId: string
+  player: PlayerCardData
+}
+
+type ActiveChance = {
+  type: "attack" | "defense"
+  selectablePlayers: PlayerCardData[]
+  opponentPlayer: PlayerCardData
+  keeper: PlayerCardData
+  duelCards: DuelCard[]
+}
+
+type CommentaryItem = {
+  id: string
+  minute: number
+  text: string
 }
 
 const MATCHES: MatchOption[] = [
@@ -34,23 +67,41 @@ const MATCHES: MatchOption[] = [
     name: "Starter Clash",
     opponentOvr: 85,
     rewardCoins: 10000,
-    description: "Lower-level team. Safe way to earn coins.",
+    description: "Easier team with weaker duels.",
   },
   {
     id: "pro",
     name: "Pro Challenge",
     opponentOvr: 90,
     rewardCoins: 25000,
-    description: "Balanced opponent with stronger players.",
+    description: "Balanced team and tougher chances.",
   },
   {
     id: "elite",
     name: "Elite Showdown",
     opponentOvr: 99,
     rewardCoins: 50000,
-    description: "Top-tier opponent. High risk, high reward.",
+    description: "Top level team with strong attack and defense.",
   },
 ]
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value))
+}
+
+function average(values: number[]) {
+  if (values.length === 0) return 0
+  return values.reduce((a, b) => a + b, 0) / values.length
+}
+
+function shuffleArray<T>(arr: T[]) {
+  const copy = [...arr]
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy
+}
 
 function normalizeSlotToPosition(slotName: string): string {
   const lower = slotName.toLowerCase()
@@ -71,226 +122,617 @@ function normalizeSlotToPosition(slotName: string): string {
   return lower.toUpperCase()
 }
 
-function getPositionGroup(position: string): "gk" | "defense" | "midfield" | "attack" {
-  const pos = position.toUpperCase()
-
-  if (pos === "GK") return "gk"
-  if (["LB", "RB", "CB"].includes(pos)) return "defense"
-  if (["CM", "CDM", "CAM"].includes(pos)) return "midfield"
-  return "attack"
+function isMidfielder(pos: string) {
+  return ["CM", "CDM", "CAM", "LM", "RM"].includes(pos.toUpperCase())
 }
 
-function isAltPosition(player: InventoryPlayer, slotName: string) {
-  const slotPos = normalizeSlotToPosition(slotName)
-  return (player.altPositions ?? []).map((p) => p.toUpperCase()).includes(slotPos)
+function isAttacker(pos: string) {
+  return ["ST", "CF", "LW", "RW"].includes(pos.toUpperCase())
 }
 
-function getPenalty(player: InventoryPlayer, slotName: string) {
-  const playerPos = player.position.toUpperCase()
-  const slotPos = normalizeSlotToPosition(slotName)
-
-  if (playerPos === slotPos) return 0
-  if (isAltPosition(player, slotName)) return 0
-
-  const playerGroup = getPositionGroup(playerPos)
-  const slotGroup = getPositionGroup(slotPos)
-
-  if (playerGroup === "gk" || slotGroup === "gk") return 50
-
-  if (playerPos === "ST" && ["LW", "RW", "LM", "RM"].includes(slotPos)) return 1
-  if (playerPos === "ST" && ["CM", "CDM", "CAM"].includes(slotPos)) return 6
-  if (playerPos === "ST" && ["LB", "RB", "CB"].includes(slotPos)) return 10
-
-  if (["LW", "RW", "LM", "RM"].includes(playerPos) && slotPos === "ST") return 1
-
-  if (
-    (playerGroup === "attack" && slotGroup === "midfield") ||
-    (playerGroup === "midfield" && slotGroup === "attack")
-  ) return 6
-
-  if (
-    (playerGroup === "attack" && slotGroup === "defense") ||
-    (playerGroup === "defense" && slotGroup === "attack")
-  ) return 10
-
-  if (
-    (playerGroup === "midfield" && slotGroup === "defense") ||
-    (playerGroup === "defense" && slotGroup === "midfield")
-  ) return 6
-
-  return 6
+function isDefender(pos: string) {
+  return ["LB", "RB", "CB"].includes(pos.toUpperCase())
 }
 
-function getAdjustedRating(player: InventoryPlayer, slotName: string) {
-  return Math.max(1, player.rating - getPenalty(player, slotName))
+function getStatBlock(player: InventoryPlayer) {
+  const base = player.rating
+  const isGK = player.position.toUpperCase() === "GK"
+
+  return {
+    pace: player.stats?.pace ?? clamp(isGK ? base - 30 : base + 1, 1, 99),
+    shooting: player.stats?.shooting ?? clamp(isGK ? 20 : base, 1, 99),
+    passing: player.stats?.passing ?? clamp(isGK ? base - 5 : base - 1, 1, 99),
+    dribbling: player.stats?.dribbling ?? clamp(isGK ? base - 20 : base, 1, 99),
+    defending: player.stats?.defending ?? clamp(isGK ? base : base - 5, 1, 99),
+    physical: player.stats?.physical ?? clamp(base - 2, 1, 99),
+    diving: player.stats?.diving ?? clamp(isGK ? base : base - 20, 1, 99),
+    handling: player.stats?.handling ?? clamp(isGK ? base : base - 20, 1, 99),
+    reflexes: player.stats?.reflexes ?? clamp(isGK ? base : base - 20, 1, 99),
+    positioning: player.stats?.positioning ?? clamp(isGK ? base : base - 20, 1, 99),
+  }
 }
 
-function getSquadPlayersWithSlots(): Array<{ player: InventoryPlayer; slot: string }> {
+function createAiPlayer(name: string, rating: number, position: string): PlayerCardData {
+  const base = clamp(rating, 1, 99)
+
+  if (position === "GK") {
+    return {
+      id: `${name}-${position}-${Math.random()}`,
+      name,
+      rating: base,
+      position,
+      altPositions: [],
+      cardImage: "/cards/default.png",
+      stats: {
+        pace: clamp(base - 30, 1, 99),
+        shooting: 20,
+        passing: clamp(base - 8, 1, 99),
+        dribbling: clamp(base - 20, 1, 99),
+        defending: clamp(base, 1, 99),
+        physical: clamp(base - 4, 1, 99),
+        diving: clamp(base + 1, 1, 99),
+        handling: clamp(base, 1, 99),
+        reflexes: clamp(base + 1, 1, 99),
+        positioning: clamp(base, 1, 99),
+      },
+    }
+  }
+
+  if (isAttacker(position)) {
+    return {
+      id: `${name}-${position}-${Math.random()}`,
+      name,
+      rating: base,
+      position,
+      altPositions: [],
+      cardImage: "/cards/default.png",
+      stats: {
+        pace: clamp(base + 2, 1, 99),
+        shooting: clamp(base + 2, 1, 99),
+        passing: clamp(base - 1, 1, 99),
+        dribbling: clamp(base + 1, 1, 99),
+        defending: clamp(base - 10, 1, 99),
+        physical: clamp(base, 1, 99),
+        diving: 10,
+        handling: 10,
+        reflexes: 10,
+        positioning: 10,
+      },
+    }
+  }
+
+  if (isMidfielder(position)) {
+    return {
+      id: `${name}-${position}-${Math.random()}`,
+      name,
+      rating: base,
+      position,
+      altPositions: [],
+      cardImage: "/cards/default.png",
+      stats: {
+        pace: clamp(base, 1, 99),
+        shooting: clamp(base - 1, 1, 99),
+        passing: clamp(base + 2, 1, 99),
+        dribbling: clamp(base + 1, 1, 99),
+        defending: clamp(base - 2, 1, 99),
+        physical: clamp(base - 1, 1, 99),
+        diving: 10,
+        handling: 10,
+        reflexes: 10,
+        positioning: 10,
+      },
+    }
+  }
+
+  return {
+    id: `${name}-${position}-${Math.random()}`,
+    name,
+    rating: base,
+    position,
+    altPositions: [],
+    cardImage: "/cards/default.png",
+    stats: {
+      pace: clamp(base - 1, 1, 99),
+      shooting: clamp(base - 8, 1, 99),
+      passing: clamp(base - 2, 1, 99),
+      dribbling: clamp(base - 3, 1, 99),
+      defending: clamp(base + 2, 1, 99),
+      physical: clamp(base + 1, 1, 99),
+      diving: 10,
+      handling: 10,
+      reflexes: 10,
+      positioning: 10,
+    },
+  }
+}
+
+function buildAiTeam(opponentOvr: number): PlayerCardData[] {
+  const positions = ["GK", "LB", "CB", "CB", "RB", "CM", "CM", "CAM", "LW", "ST", "RW"]
+  return positions.map((position, index) =>
+    createAiPlayer(`Rivals ${position} ${index + 1}`, opponentOvr, position)
+  )
+}
+
+function getUserTeamCards(): PlayerCardData[] {
   const inventory = getInventory()
   const squad = getSquad()
 
-  return Object.entries(squad.slots)
-    .map(([slot, id]) => {
-      const player = inventory.find((p) => p.id === id)
+  const squadPlayers = Object.entries(squad.slots)
+    .map(([slot, playerId]) => {
+      const player = inventory.find((p) => p.id === playerId)
       if (!player) return null
       return { player, slot }
     })
     .filter((entry): entry is { player: InventoryPlayer; slot: string } => Boolean(entry))
+
+  const hasAttackBoost = squadPlayers.some(
+    ({ player }) => player.baseId === "r9_100" || player.skill === "attack_boost_1"
+  )
+
+  return squadPlayers.map(({ player, slot }) => {
+    const position = normalizeSlotToPosition(slot)
+    const boostedRating = hasAttackBoost && isAttacker(position) ? player.rating + 1 : player.rating
+
+    return {
+      id: player.id,
+      baseId: player.baseId,
+      name: player.name,
+      rating: boostedRating,
+      position,
+      altPositions: player.altPositions ?? [],
+      cardImage: player.cardImage,
+      skill: player.skill,
+      stats: getStatBlock(player),
+    }
+  })
 }
 
-function calculateAdjustedSquadOvr(
-  playersWithSlots: Array<{ player: InventoryPlayer; slot: string }>,
-  totalSlots: number
-) {
-  if (totalSlots === 0) return 0
-
-  const total = playersWithSlots.reduce((sum, entry) => {
-    return sum + getAdjustedRating(entry.player, entry.slot)
-  }, 0)
-
-  return Math.round(total / totalSlots)
+function getSquadOvr(team: PlayerCardData[]) {
+  if (team.length === 0) return 0
+  return Math.round(average(team.map((p) => p.rating)))
 }
 
-function getMatchRates(userOvr: number, opponentOvr: number) {
-  const diff = userOvr - opponentOvr
-
-  let winRate = 50
-  let loseRate = 50
-
-  if (diff > 0) {
-    winRate += diff * 10
-    loseRate -= diff * 10
-  } else if (diff < 0) {
-    loseRate += Math.abs(diff) * 10
-    winRate -= Math.abs(diff) * 10
-  }
-
-  winRate = Math.max(0, Math.min(100, winRate))
-  loseRate = Math.max(0, Math.min(100, loseRate))
-
-  return { winRate, loseRate }
-}
-
-function randomWinningScore() {
-  const scores = [
-    [1, 0],
-    [2, 0],
-    [2, 1],
-    [3, 0],
-    [3, 1],
-    [3, 2],
-    [4, 1],
-  ]
-  return scores[Math.floor(Math.random() * scores.length)]
-}
-
-function randomLosingScore() {
-  const scores = [
-    [0, 1],
-    [0, 2],
-    [1, 2],
-    [0, 3],
-    [1, 3],
-    [2, 3],
-    [1, 4],
-  ]
-  return scores[Math.floor(Math.random() * scores.length)]
-}
-
-function simulateMatch(userOvr: number, opponent: MatchOption): SimResult {
-  const { winRate, loseRate } = getMatchRates(userOvr, opponent.opponentOvr)
-  const roll = Math.random() * 100
-  const didWin = roll < winRate
-
-  const pickedScore = didWin ? randomWinningScore() : randomLosingScore()
-
+function getMidfieldStrength(team: PlayerCardData[]) {
+  const mids = team.filter((p) => isMidfielder(p.position))
   return {
-    opponentName: opponent.name,
-    userGoals: pickedScore[0],
-    aiGoals: pickedScore[1],
-    didWin,
-    winRate,
-    loseRate,
-    reward: didWin ? opponent.rewardCoins : 0,
+    ovr: average(mids.map((p) => p.rating)),
+    passDribble: average(mids.map((p) => (p.stats.passing + p.stats.dribbling) / 2)),
   }
+}
+
+function getChanceProbability(userTeam: PlayerCardData[], aiTeam: PlayerCardData[], side: "user" | "ai") {
+  const userMid = getMidfieldStrength(userTeam)
+  const aiMid = getMidfieldStrength(aiTeam)
+
+  let edge = 0
+
+  if (Math.round(userMid.ovr) !== Math.round(aiMid.ovr)) {
+    edge = userMid.ovr - aiMid.ovr
+  } else {
+    edge = (userMid.passDribble - aiMid.passDribble) / 2
+  }
+
+  const signedEdge = side === "user" ? edge : -edge
+  return clamp(0.18 + signedEdge * 0.01, 0.06, 0.42)
+}
+
+function getAttackers(team: PlayerCardData[]) {
+  return team.filter((p) => isAttacker(p.position)).slice(0, 3)
+}
+
+function getDefenders(team: PlayerCardData[]) {
+  return team.filter((p) => isDefender(p.position)).slice(0, 3)
+}
+
+function getKeeper(team: PlayerCardData[]) {
+  return team.find((p) => p.position === "GK") ?? team[0]
+}
+
+function buildChance(type: "attack" | "defense", userTeam: PlayerCardData[], aiTeam: PlayerCardData[]): ActiveChance {
+  if (type === "attack") {
+    const selectablePlayers = getAttackers(userTeam)
+    const opponentPlayer = getDefenders(aiTeam)[Math.floor(Math.random() * 3)]
+    return {
+      type,
+      selectablePlayers,
+      opponentPlayer,
+      keeper: getKeeper(aiTeam),
+      duelCards: shuffleArray(
+        selectablePlayers.map((player, i) => ({
+          hiddenId: `ua-${i}-${player.id}`,
+          player,
+        }))
+      ),
+    }
+  }
+
+  const selectablePlayers = getDefenders(userTeam)
+  const opponentPlayer = getAttackers(aiTeam)[Math.floor(Math.random() * 3)]
+  return {
+    type,
+    selectablePlayers,
+    opponentPlayer,
+    keeper: getKeeper(userTeam),
+    duelCards: shuffleArray(
+      selectablePlayers.map((player, i) => ({
+        hiddenId: `ud-${i}-${player.id}`,
+        player,
+      }))
+    ),
+  }
+}
+
+function duelAgainst(
+  type: "attack" | "defense",
+  chosen: PlayerCardData,
+  opponent: PlayerCardData
+) {
+  if (type === "attack") {
+    if (chosen.rating > opponent.rating) {
+      return true
+    }
+    if (chosen.rating < opponent.rating) {
+      return false
+    }
+
+    const attackerTie = chosen.stats.pace
+    const defenderTie = (opponent.stats.defending + opponent.stats.physical) / 2
+    return attackerTie > defenderTie
+  }
+
+  if (chosen.rating > opponent.rating) {
+    return true
+  }
+  if (chosen.rating < opponent.rating) {
+    return false
+  }
+
+  const attackerTie = opponent.stats.pace
+  const defenderTie = (chosen.stats.defending + chosen.stats.physical) / 2
+  return defenderTie > attackerTie
+}
+
+function getGoalkeeperPower(keeper: PlayerCardData) {
+  return average([keeper.stats.diving, keeper.stats.reflexes, keeper.stats.positioning])
+}
+
+function getScoringBoxCount(shooting: number, keeperPower: number) {
+  const diff = shooting - keeperPower
+  return clamp(6 + Math.floor(diff / 2), 2, 10)
+}
+
+function makeGoalBoxes(count: number) {
+  return shuffleArray(Array.from({ length: 12 }, (_, i) => i)).slice(0, count)
+}
+
+function getShotTimerSeconds(pressurePlayers: PlayerCardData[]) {
+  const pacePressure = average(pressurePlayers.map((p) => p.stats.pace))
+  return clamp(20 - Math.floor(pacePressure / 10), 6, 20)
 }
 
 export default function MatchPage() {
-  const [coins, setCoins] = useState(0)
-  const [result, setResult] = useState<SimResult | null>(null)
-
+  const [phase, setPhase] = useState<"idle" | "simulating" | "finished">("idle")
   const [selectedMatch, setSelectedMatch] = useState<MatchOption | null>(null)
-  const [showPopup, setShowPopup] = useState(false)
-  const [isSimulating, setIsSimulating] = useState(false)
-  const [countdown, setCountdown] = useState(5)
+  const [userTeam, setUserTeam] = useState<PlayerCardData[]>([])
+  const [aiTeam, setAiTeam] = useState<PlayerCardData[]>([])
+  const [coins, setCoins] = useState(0)
 
-  const squad = useMemo(() => getSquad(), [])
-  const totalSlots = Object.keys(squad.slots || {}).length || 11
-  const squadPlayersWithSlots = useMemo(() => getSquadPlayersWithSlots(), [])
-  const squadCount = squadPlayersWithSlots.length
+  const [timeElapsed, setTimeElapsed] = useState(0)
+  const [simDots, setSimDots] = useState(".")
+  const [score, setScore] = useState({ user: 0, ai: 0 })
+  const [commentary, setCommentary] = useState<CommentaryItem[]>([])
 
-  const squadOvr = useMemo(() => {
-    return calculateAdjustedSquadOvr(squadPlayersWithSlots, totalSlots)
-  }, [squadPlayersWithSlots, totalSlots])
+  const [activeChance, setActiveChance] = useState<ActiveChance | null>(null)
+  const [chanceMessage, setChanceMessage] = useState("")
+  const [pickedCardId, setPickedCardId] = useState<string | null>(null)
+  const [duelChosen, setDuelChosen] = useState<PlayerCardData | null>(null)
+  const [duelOpponent, setDuelOpponent] = useState<PlayerCardData | null>(null)
+  const [duelResolved, setDuelResolved] = useState(false)
+
+  const [awaitingContinue, setAwaitingContinue] = useState(false)
+  const [pendingDuelResult, setPendingDuelResult] = useState<{
+    success: boolean
+    nextPlayer: PlayerCardData | null
+  } | null>(null)
+
+  const [shotStage, setShotStage] = useState(false)
+  const [shooter, setShooter] = useState<PlayerCardData | null>(null)
+  const [keeper, setKeeper] = useState<PlayerCardData | null>(null)
+  const [goalBoxes, setGoalBoxes] = useState<number[]>([])
+  const [pickedBox, setPickedBox] = useState<number | null>(null)
+  const [shotResolved, setShotResolved] = useState(false)
+  const [shotResultMessage, setShotResultMessage] = useState("")
+  const [shotTimer, setShotTimer] = useState(0)
+  const [shotTimerActive, setShotTimerActive] = useState(false)
+
+  const phaseRef = useRef(phase)
+  const activeChanceRef = useRef<ActiveChance | null>(activeChance)
+
+  const squadOvr = useMemo(() => getSquadOvr(userTeam), [userTeam])
+
+  function addComment(text: string, minuteOverride?: number) {
+    const minute = minuteOverride ?? Math.max(1, timeElapsed)
+    setCommentary((prev) => [
+      { id: `${Date.now()}-${Math.random()}`, minute, text },
+      ...prev,
+    ].slice(0, 20))
+  }
+
+  useEffect(() => {
+    phaseRef.current = phase
+  }, [phase])
+
+  useEffect(() => {
+    activeChanceRef.current = activeChance
+  }, [activeChance])
 
   useEffect(() => {
     setCoins(getUserData().coins)
+    setUserTeam(getUserTeamCards())
   }, [])
 
   useEffect(() => {
-    if (!isSimulating) return
-    if (countdown <= 0) return
+    if (phase !== "simulating") return
+    if (activeChance) return
 
-    const timer = window.setTimeout(() => {
-      setCountdown((prev) => prev - 1)
+    const interval = window.setInterval(() => {
+      if (phaseRef.current !== "simulating") return
+      if (activeChanceRef.current) return
+
+      setTimeElapsed((prev) => {
+        const next = prev + 1
+        if (next >= 90) {
+          window.clearInterval(interval)
+          finishMatch()
+        }
+        return next
+      })
+
+      setSimDots((prev) => {
+        if (prev === "...") return "."
+        if (prev === "..") return "..."
+        return ".."
+      })
+
+      const userChance = Math.random() < getChanceProbability(userTeam, aiTeam, "user")
+      const aiChance = Math.random() < getChanceProbability(userTeam, aiTeam, "ai")
+
+      if (userChance) {
+        addComment("Your side creates a chance.")
+        openChance("attack")
+      } else if (aiChance) {
+        addComment("The opponents create a chance.")
+        openChance("defense")
+      }
     }, 1000)
 
-    return () => window.clearTimeout(timer)
-  }, [isSimulating, countdown])
+    return () => window.clearInterval(interval)
+  }, [phase, activeChance, userTeam, aiTeam, timeElapsed])
 
   useEffect(() => {
-    if (!isSimulating || countdown > 0 || !selectedMatch) return
+    if (!shotTimerActive) return
 
-    const sim = simulateMatch(squadOvr, selectedMatch)
+    const interval = window.setInterval(() => {
+      setShotTimer((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(interval)
+          setShotTimerActive(false)
+          setShotResolved(true)
+          setShotResultMessage("Chance missed")
+          addComment("Chance missed.")
+          setTimeout(() => {
+            clearChanceState()
+          }, 1400)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
 
-    if (sim.didWin) {
+    return () => window.clearInterval(interval)
+  }, [shotTimerActive, timeElapsed])
+
+  const resultText =
+    score.user > score.ai ? "You won" : score.user < score.ai ? "You lost" : "Draw"
+
+  function canSkipMatch() {
+    return phase === "simulating" && score.user - score.ai >= 4
+  }
+
+  function startMatch(match: MatchOption) {
+    const currentUserTeam = getUserTeamCards()
+    setUserTeam(currentUserTeam)
+    setAiTeam(buildAiTeam(match.opponentOvr))
+    setSelectedMatch(match)
+    setPhase("simulating")
+    setTimeElapsed(0)
+    setSimDots(".")
+    setScore({ user: 0, ai: 0 })
+    setCommentary([{ id: "kickoff", minute: 0, text: "Kick-off!" }])
+    clearChanceState()
+  }
+
+  function finishMatch() {
+    setPhase("finished")
+    clearChanceState()
+
+    if (!selectedMatch) return
+
+    if (score.user > score.ai) {
       const user = getUserData()
-      const updated = {
-        ...user,
-        coins: user.coins + sim.reward,
+      const updatedCoins = user.coins + selectedMatch.rewardCoins
+      saveUserData({ ...user, coins: updatedCoins })
+      setCoins(updatedCoins)
+      addComment(`Full time. You win ${score.user}-${score.ai} and earn ${selectedMatch.rewardCoins} coins.`, 90)
+    } else if (score.user < score.ai) {
+      addComment(`Full time. You lose ${score.user}-${score.ai}.`, 90)
+    } else {
+      addComment(`Full time. It ends ${score.user}-${score.ai}.`, 90)
+    }
+  }
+
+  function skipMatch() {
+    if (!selectedMatch) return
+    setTimeElapsed(90)
+    setPhase("finished")
+    clearChanceState()
+
+    const user = getUserData()
+    const updatedCoins = user.coins + selectedMatch.rewardCoins
+    saveUserData({ ...user, coins: updatedCoins })
+    setCoins(updatedCoins)
+
+    addComment("Match skipped. Comfortable win secured.", 90)
+  }
+
+  function clearChanceState() {
+    setActiveChance(null)
+    setChanceMessage("")
+    setPickedCardId(null)
+    setDuelChosen(null)
+    setDuelOpponent(null)
+    setDuelResolved(false)
+    setAwaitingContinue(false)
+    setPendingDuelResult(null)
+    setShotStage(false)
+    setShooter(null)
+    setKeeper(null)
+    setGoalBoxes([])
+    setPickedBox(null)
+    setShotResolved(false)
+    setShotResultMessage("")
+    setShotTimer(0)
+    setShotTimerActive(false)
+  }
+
+  function openChance(type: "attack" | "defense") {
+    const built = buildChance(type, userTeam, aiTeam)
+    setActiveChance(built)
+    setChanceMessage(type === "attack" ? "Your chance!" : "Opponent chance!")
+    setPickedCardId(null)
+    setDuelChosen(null)
+    setDuelOpponent(null)
+    setDuelResolved(false)
+    setAwaitingContinue(false)
+    setPendingDuelResult(null)
+    setShotStage(false)
+    setShooter(null)
+    setKeeper(null)
+    setGoalBoxes([])
+    setPickedBox(null)
+    setShotResolved(false)
+    setShotResultMessage("")
+    setShotTimer(0)
+    setShotTimerActive(false)
+  }
+
+  function handlePickCard(card: DuelCard) {
+    if (!activeChance || duelResolved) return
+
+    const success = duelAgainst(activeChance.type, card.player, activeChance.opponentPlayer)
+
+    setPickedCardId(card.hiddenId)
+    setDuelChosen(card.player)
+    setDuelOpponent(activeChance.opponentPlayer)
+    setDuelResolved(true)
+    setAwaitingContinue(true)
+
+    setPendingDuelResult({
+      success,
+      nextPlayer: success ? card.player : activeChance.type === "attack" ? null : activeChance.opponentPlayer,
+    })
+  }
+
+  function handleContinueAfterDuel() {
+    if (!activeChance || !pendingDuelResult || !duelChosen || !duelOpponent) return
+
+    setAwaitingContinue(false)
+
+    if (activeChance.type === "attack") {
+      if (pendingDuelResult.success && pendingDuelResult.nextPlayer) {
+        addComment(`${duelChosen.name} beats ${duelOpponent.name} in the duel.`)
+        beginShotStage(
+          pendingDuelResult.nextPlayer,
+          activeChance.keeper,
+          activeChance.selectablePlayers
+        )
+      } else {
+        addComment(`${duelOpponent.name} wins the duel. Chance missed.`)
+        setChanceMessage("Chance missed")
+        setTimeout(() => clearChanceState(), 800)
       }
-      saveUserData(updated)
-      setCoins(updated.coins)
+    } else {
+      if (pendingDuelResult.success) {
+        addComment(`${duelChosen.name} stops ${duelOpponent.name}.`)
+        setChanceMessage("You stopped the chance")
+        setTimeout(() => clearChanceState(), 800)
+      } else {
+        addComment(`${duelOpponent.name} gets through. Big danger.`)
+        beginShotStage(
+          duelOpponent,
+          activeChance.keeper,
+          activeChance.selectablePlayers
+        )
+      }
     }
 
-    setResult(sim)
-    setIsSimulating(false)
-    setCountdown(5)
-  }, [isSimulating, countdown, selectedMatch, squadOvr])
-
-  function openMatchPopup(match: MatchOption) {
-    if (squadCount === 0) return
-    setSelectedMatch(match)
-    setShowPopup(true)
-    setIsSimulating(false)
-    setCountdown(5)
-    setResult(null)
+    setPendingDuelResult(null)
   }
 
-  function closePopup() {
-    if (isSimulating) return
-    setShowPopup(false)
-    setSelectedMatch(null)
-    setCountdown(5)
-    setResult(null)
+  function beginShotStage(
+    nextShooter: PlayerCardData,
+    nextKeeper: PlayerCardData,
+    pressurePlayers: PlayerCardData[]
+  ) {
+    const keeperPower = getGoalkeeperPower(nextKeeper)
+    const boxCount = getScoringBoxCount(nextShooter.stats.shooting, keeperPower)
+
+    setShotStage(true)
+    setShooter(nextShooter)
+    setKeeper(nextKeeper)
+    setGoalBoxes(makeGoalBoxes(boxCount))
+    setPickedBox(null)
+    setShotResolved(false)
+    setShotResultMessage("")
+    setShotTimer(getShotTimerSeconds(pressurePlayers))
+    setShotTimerActive(true)
   }
 
-  function confirmPlayMatch() {
-    if (!selectedMatch) return
-    setResult(null)
-    setIsSimulating(true)
-    setCountdown(5)
+  function handleChooseBox(index: number) {
+    if (!activeChance || !shooter || !keeper || shotResolved) return
+
+    setShotTimerActive(false)
+    setPickedBox(index)
+    setShotResolved(true)
+
+    const scored = goalBoxes.includes(index)
+
+    if (activeChance.type === "attack") {
+      if (scored) {
+        setScore((prev) => ({ ...prev, user: prev.user + 1 }))
+        setShotResultMessage("GOAL!")
+        addComment(`GOAL! ${shooter.name} scores for your team.`)
+      } else {
+        setShotResultMessage("Chance missed")
+        addComment(`${shooter.name} misses the chance.`)
+      }
+    } else {
+      if (scored) {
+        setScore((prev) => ({ ...prev, ai: prev.ai + 1 }))
+        setShotResultMessage("GOAL!")
+        addComment(`Goal for the opponents. ${shooter.name} finishes it.`)
+      } else {
+        setShotResultMessage("Chance missed")
+        addComment(`Great save. ${keeper.name} keeps it out.`)
+      }
+    }
+
+    setTimeout(() => {
+      clearChanceState()
+    }, 1600)
   }
+
+  const squadCount = userTeam.length
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_20%),linear-gradient(to_bottom,#020617,#000000)] text-white">
@@ -298,9 +740,9 @@ export default function MatchPage() {
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur">
           <div>
             <p className="text-sm uppercase tracking-[0.35em] text-cyan-300">Match</p>
-            <h1 className="text-3xl font-black">Sim Match</h1>
+            <h1 className="text-3xl font-black">Interactive Sim Match</h1>
             <p className="mt-1 text-slate-300">
-              Pick a match and simulate it based on your squad OVR.
+              90-second sim with commentary, duel reveals, and timed finishing.
             </p>
           </div>
 
@@ -312,7 +754,7 @@ export default function MatchPage() {
 
             <Link
               href="/"
-              className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-bold text-white transition hover:bg-white/10"
+              className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-bold text-white hover:bg-white/10"
             >
               Main Menu
             </Link>
@@ -321,180 +763,293 @@ export default function MatchPage() {
 
         <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr]">
           <section className="rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <h2 className="text-2xl font-black">Your Team</h2>
+            <h2 className="text-2xl font-black">Match State</h2>
 
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+            <div className="mt-6 grid gap-4 sm:grid-cols-4 xl:grid-cols-5">
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-center">
+                <div className="text-xs uppercase tracking-widest text-slate-400">Timer</div>
+                <div className="mt-2 text-4xl font-black">{timeElapsed}s</div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-center">
+                <div className="text-xs uppercase tracking-widest text-slate-400">Score</div>
+                <div className="mt-2 whitespace-nowrap text-4xl font-black leading-none">
+                  {score.user} - {score.ai}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-center">
+                <div className="text-xs uppercase tracking-widest text-slate-400">Sim</div>
+                <div className="mt-2 text-2xl font-black">
+                  {phase === "simulating" ? `Sim${simDots}` : phase === "finished" ? "Finished" : "Idle"}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-center">
+                <div className="text-xs uppercase tracking-widest text-slate-400">Squad Players</div>
+                <div className="mt-2 text-4xl font-black">{squadCount}</div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-center">
                 <div className="text-xs uppercase tracking-widest text-slate-400">Squad OVR</div>
                 <div className="mt-2 text-4xl font-black">{squadOvr}</div>
               </div>
+            </div>
 
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                <div className="text-xs uppercase tracking-widest text-slate-400">Players in Squad</div>
-                <div className="mt-2 text-4xl font-black">{squadCount}</div>
+            {canSkipMatch() && (
+              <button
+                onClick={skipMatch}
+                className="mt-4 w-full rounded-2xl bg-green-400 px-6 py-3 font-black text-slate-950"
+              >
+                Skip Match (Winning by 4+)
+              </button>
+            )}
+
+            <div className="mt-8 rounded-2xl border border-white/10 bg-black/20 p-5">
+              <div className="mb-3 text-lg font-black">Live Commentary</div>
+              <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+                {commentary.length === 0 && (
+                  <div className="text-slate-400">No events yet.</div>
+                )}
+                {commentary.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
+                  >
+                    <span className="mr-2 font-black text-cyan-300">{item.minute}'</span>
+                    <span>{item.text}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="mt-8 rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-slate-300">
-              Win/Lose rates start at <span className="font-bold">50% / 50%</span>.
-              <br />
-              Every <span className="font-bold">1 OVR higher</span> gives
-              <span className="font-bold"> +10% win</span>.
-              <br />
-              Every <span className="font-bold">1 OVR lower</span> gives
-              <span className="font-bold"> +10% lose</span>.
-              <br />
-              Empty slots count as 0 OVR.
-              <br />
-              Alternative positions have no penalty.
-              <br />
-              No draws.
-            </div>
-
-            {squadCount === 0 && (
-              <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-red-200">
-                Your squad is empty. Add players to your squad first.
+            {phase === "finished" && selectedMatch && (
+              <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5 text-center">
+                <div className="text-3xl font-black">{resultText}</div>
+                <div className="mt-2 text-slate-300">
+                  Final score: {score.user} - {score.ai}
+                </div>
+                <div className="mt-2 font-bold text-yellow-300">
+                  {score.user > score.ai ? `+${selectedMatch.rewardCoins} coins` : "+0 coins"}
+                </div>
               </div>
             )}
           </section>
 
           <aside className="rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <h2 className="text-2xl font-black">Match Selection</h2>
+            <h2 className="text-2xl font-black">Matches</h2>
 
             <div className="mt-6 space-y-4">
-              {MATCHES.map((match) => {
-                const rates = getMatchRates(squadOvr, match.opponentOvr)
-
-                return (
-                  <div
-                    key={match.id}
-                    className="rounded-2xl border border-white/10 bg-black/20 p-5"
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <div className="text-xl font-black">{match.name}</div>
-                        <div className="mt-1 text-sm text-slate-400">{match.description}</div>
-                      </div>
-
-                      <div className="text-right">
-                        <div className="text-sm text-slate-400">Opponent OVR</div>
-                        <div className="text-2xl font-black">{match.opponentOvr}</div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-                      <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                        <div className="text-xs uppercase text-slate-400">Win</div>
-                        <div className="text-xl font-black text-green-400">{rates.winRate}%</div>
-                      </div>
-
-                      <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                        <div className="text-xs uppercase text-slate-400">Lose</div>
-                        <div className="text-xl font-black text-red-400">{rates.loseRate}%</div>
-                      </div>
-
-                      <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                        <div className="text-xs uppercase text-slate-400">Reward</div>
-                        <div className="text-xl font-black text-yellow-300">{match.rewardCoins}</div>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => openMatchPopup(match)}
-                      disabled={squadCount === 0}
-                      className="mt-5 w-full rounded-2xl bg-cyan-400 px-6 py-3 font-black text-slate-950 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Play Match
-                    </button>
+              {MATCHES.map((match) => (
+                <div
+                  key={match.id}
+                  className="rounded-2xl border border-white/10 bg-black/20 p-5"
+                >
+                  <div className="text-xl font-black">{match.name}</div>
+                  <div className="mt-1 text-sm text-slate-400">{match.description}</div>
+                  <div className="mt-3 text-sm text-slate-300">
+                    Opponent OVR: {match.opponentOvr}
                   </div>
-                )
-              })}
+                  <div className="mt-1 text-sm text-slate-300">
+                    Your OVR: {squadOvr}
+                  </div>
+                  <div className="text-sm font-bold text-yellow-300">
+                    Win reward: {match.rewardCoins}
+                  </div>
+
+                  <button
+                    onClick={() => startMatch(match)}
+                    disabled={phase === "simulating"}
+                    className="mt-4 w-full rounded-2xl bg-cyan-400 px-6 py-3 font-black text-slate-950 disabled:opacity-50"
+                  >
+                    Play Match
+                  </button>
+                </div>
+              ))}
             </div>
           </aside>
         </div>
       </div>
 
-      {showPopup && selectedMatch && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-slate-950 p-6 text-center shadow-2xl">
-            {!isSimulating && !result && (
+      {activeChance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4">
+          <div className="w-full max-w-4xl rounded-[32px] border border-white/10 bg-slate-950 p-6 shadow-2xl">
+            <div className="text-center">
+              <p className="text-sm uppercase tracking-[0.35em] text-cyan-300">
+                {activeChance.type === "attack" ? "Attack Chance" : "Defend Chance"}
+              </p>
+              <h2 className="mt-2 text-3xl font-black">{chanceMessage}</h2>
+            </div>
+
+            {!shotStage && (
               <>
-                <p className="text-sm uppercase tracking-[0.35em] text-cyan-300">Confirm Match</p>
-                <h2 className="mt-3 text-3xl font-black">{selectedMatch.name}</h2>
-                <p className="mt-3 text-slate-300">{selectedMatch.description}</p>
-
-                <div className="mt-6 grid grid-cols-2 gap-4">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div className="text-xs text-slate-400">Your OVR</div>
-                    <div className="mt-2 text-3xl font-black">{squadOvr}</div>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div className="text-xs text-slate-400">Opponent</div>
-                    <div className="mt-2 text-3xl font-black">{selectedMatch.opponentOvr}</div>
-                  </div>
+                <div className="mt-6 text-center text-slate-300">
+                  {activeChance.type === "attack"
+                    ? "Pick one of your attackers."
+                    : "Pick one of your defenders."}
                 </div>
 
-                <div className="mt-6 flex gap-3">
-                  <button
-                    onClick={closePopup}
-                    className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 font-bold hover:bg-white/10"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={confirmPlayMatch}
-                    className="flex-1 rounded-2xl bg-cyan-400 px-4 py-3 font-black text-slate-950"
-                  >
-                    Confirm
-                  </button>
+                <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  {activeChance.duelCards.map((card) => {
+                    const revealed = pickedCardId === card.hiddenId
+
+                    return (
+                      <button
+                        key={card.hiddenId}
+                        onClick={() => handlePickCard(card)}
+                        disabled={duelResolved}
+                        className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center transition hover:bg-white/10 disabled:opacity-80"
+                      >
+                        {!revealed ? (
+                          <div className="flex flex-col items-center">
+                            <div className="flex h-32 w-full items-center justify-center text-5xl font-black text-slate-500">
+                              ?
+                            </div>
+                            <div className="mt-2 text-sm font-bold text-slate-300">Hidden Card</div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <Image
+                              src={card.player.cardImage}
+                              alt={card.player.name}
+                              width={92}
+                              height={132}
+                              className="mb-3 rounded-xl object-cover"
+                            />
+                            <div className="text-lg font-black">{card.player.name}</div>
+                            <div className="text-sm text-slate-300">
+                              {card.player.rating} • {card.player.position}
+                            </div>
+                          </div>
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
+
+                {duelResolved && duelChosen && duelOpponent && (
+                  <div className="mt-8 rounded-2xl border border-white/10 bg-black/20 p-5 text-center">
+                    <div className="mb-4 text-xl font-black">Duel Reveal</div>
+
+                    <div className="grid gap-6 sm:grid-cols-2">
+                      <div className="flex flex-col items-center rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <Image
+                          src={duelChosen.cardImage}
+                          alt={duelChosen.name}
+                          width={112}
+                          height={160}
+                          className="mb-3 rounded-xl object-cover"
+                        />
+                        <div className="text-lg font-black">{duelChosen.name}</div>
+                        <div className="text-sm text-slate-300">
+                          {duelChosen.rating} • {duelChosen.position}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-center rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <Image
+                          src={duelOpponent.cardImage}
+                          alt={duelOpponent.name}
+                          width={112}
+                          height={160}
+                          className="mb-3 rounded-xl object-cover"
+                        />
+                        <div className="text-lg font-black">{duelOpponent.name}</div>
+                        <div className="text-sm text-slate-300">
+                          {duelOpponent.rating} • {duelOpponent.position}
+                        </div>
+                      </div>
+                    </div>
+
+                    {awaitingContinue && (
+                      <div className="mt-6 text-center">
+                        <button
+                          onClick={handleContinueAfterDuel}
+                          className="rounded-2xl bg-cyan-400 px-6 py-3 font-black text-slate-950"
+                        >
+                          Continue
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
 
-            {isSimulating && (
-              <>
-                <p className="text-sm uppercase tracking-[0.35em] text-cyan-300">Match In Progress</p>
-                <h2 className="mt-3 text-3xl font-black">{selectedMatch.name}</h2>
-
-                <div className="mx-auto mt-8 h-20 w-20 animate-spin rounded-full border-4 border-cyan-400 border-t-transparent" />
-
-                <p className="mt-6 text-lg font-bold">Simulating match...</p>
-                <p className="mt-2 text-slate-300">{countdown}s remaining</p>
-              </>
-            )}
-
-            {!isSimulating && result && (
-              <>
-                <p className="text-sm uppercase tracking-[0.35em] text-cyan-300">Result</p>
-                <h2 className="mt-3 text-3xl font-black">{result.opponentName}</h2>
-
-                <div className="mt-6 text-6xl font-black">
-                  {result.userGoals} - {result.aiGoals}
+            {shotStage && shooter && keeper && (
+              <div className="mt-8">
+                <div className="mb-4 text-center">
+                  <div className="text-xl font-black">
+                    {activeChance.type === "attack" ? "Shoot!" : "Save it!"}
+                  </div>
+                  <div className="mt-1 text-slate-300">
+                    Shooter: {shooter.name} ({shooter.stats.shooting} SHO) • Keeper: {keeper.name} (
+                    {Math.round(getGoalkeeperPower(keeper))} GK)
+                  </div>
+                  <div className="mt-3 text-2xl font-black text-yellow-300">
+                    Time: {shotTimer}s
+                  </div>
                 </div>
 
-                <div
-                  className={`mt-4 text-2xl font-black ${
-                    result.didWin ? "text-green-400" : "text-red-400"
-                  }`}
-                >
-                  {result.didWin ? "YOU WON" : "YOU LOST"}
-                </div>
+                <div className="mx-auto max-w-3xl rounded-3xl border border-white/10 bg-black/20 p-6">
+                  <div className="mb-4 text-center font-black">Goal</div>
 
-                <div className="mt-4 text-slate-300">
-                  Win Rate: {result.winRate}% • Lose Rate: {result.loseRate}%
-                </div>
+                  <div className="mx-auto mb-6 flex max-w-sm items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <Image
+                      src={keeper.cardImage}
+                      alt={keeper.name}
+                      width={72}
+                      height={104}
+                      className="rounded-xl object-cover"
+                    />
+                    <div className="text-left">
+                      <div className="font-black">{keeper.name}</div>
+                      <div className="text-sm text-slate-300">
+                        GK • DIV {keeper.stats.diving} • REF {keeper.stats.reflexes} • POS {keeper.stats.positioning}
+                      </div>
+                    </div>
+                  </div>
 
-                <div className="mt-3 text-xl font-bold text-yellow-300">
-                  {result.didWin ? `+${result.reward} coins` : "+0 coins"}
-                </div>
+                  <div className="grid grid-cols-4 gap-3">
+                    {Array.from({ length: 12 }).map((_, index) => {
+                      const isGoalBox = goalBoxes.includes(index)
+                      const isPicked = pickedBox === index
 
-                <button
-                  onClick={closePopup}
-                  className="mt-6 w-full rounded-2xl bg-cyan-400 px-6 py-3 font-black text-slate-950"
-                >
-                  Continue
-                </button>
-              </>
+                      let boxClass = "bg-white/10 hover:bg-white/20"
+                      if (shotResolved) {
+                        if (activeChance.type === "attack") {
+                          if (isPicked && isGoalBox) boxClass = "bg-green-500/80"
+                          else if (isPicked && !isGoalBox) boxClass = "bg-red-500/80"
+                          else if (isGoalBox) boxClass = "bg-green-500/40"
+                          else boxClass = "bg-red-500/20"
+                        } else {
+                          if (isPicked && isGoalBox) boxClass = "bg-red-500/80"
+                          else if (isPicked && !isGoalBox) boxClass = "bg-green-500/80"
+                          else if (isGoalBox) boxClass = "bg-red-500/40"
+                          else boxClass = "bg-green-500/20"
+                        }
+                      }
+
+                      return (
+                        <button
+                          key={index}
+                          onClick={() => handleChooseBox(index)}
+                          disabled={shotResolved}
+                          className={`h-20 rounded-2xl border border-white/10 transition ${boxClass}`}
+                        >
+                          {shotResolved && isPicked ? <span className="text-2xl">●</span> : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {shotResolved && (
+                    <div className="mt-6 text-center text-3xl font-black">
+                      {shotResultMessage}
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         </div>

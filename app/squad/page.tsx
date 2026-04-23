@@ -59,6 +59,10 @@ const formationLayouts: Record<string, Record<string, PositionPoint>> = {
   },
 }
 
+function normalizePositionText(position: string): string {
+  return position.trim().toUpperCase()
+}
+
 function normalizeSlotToPosition(slotName: string): string {
   const lower = slotName.toLowerCase()
 
@@ -79,21 +83,22 @@ function normalizeSlotToPosition(slotName: string): string {
 }
 
 function getPositionGroup(position: string): "gk" | "defense" | "midfield" | "attack" {
-  const pos = position.toUpperCase()
+  const pos = normalizePositionText(position)
 
   if (pos === "GK") return "gk"
   if (["LB", "RB", "CB"].includes(pos)) return "defense"
-  if (["CM", "CDM", "CAM"].includes(pos)) return "midfield"
+  if (["CM", "CDM", "CAM", "LM", "RM"].includes(pos)) return "midfield"
   return "attack"
 }
 
 function isAltPosition(player: InventoryPlayer, slotName: string) {
   const slotPos = normalizeSlotToPosition(slotName)
-  return (player.altPositions ?? []).map((p) => p.toUpperCase()).includes(slotPos)
+  const altPositions = (player.altPositions ?? []).map((p) => normalizePositionText(p))
+  return altPositions.includes(slotPos)
 }
 
 function getPositionPenalty(player: InventoryPlayer, slotName: string): number {
-  const playerPos = player.position.toUpperCase()
+  const playerPos = normalizePositionText(player.position)
   const slotPos = normalizeSlotToPosition(slotName)
 
   if (playerPos === slotPos) return 0
@@ -113,17 +118,23 @@ function getPositionPenalty(player: InventoryPlayer, slotName: string): number {
   if (
     (playerGroup === "attack" && slotGroup === "midfield") ||
     (playerGroup === "midfield" && slotGroup === "attack")
-  ) return 6
+  ) {
+    return 6
+  }
 
   if (
     (playerGroup === "attack" && slotGroup === "defense") ||
     (playerGroup === "defense" && slotGroup === "attack")
-  ) return 10
+  ) {
+    return 10
+  }
 
   if (
     (playerGroup === "midfield" && slotGroup === "defense") ||
     (playerGroup === "defense" && slotGroup === "midfield")
-  ) return 6
+  ) {
+    return 6
+  }
 
   return 6
 }
@@ -505,6 +516,11 @@ export default function SquadPage() {
                       <div className="text-xs uppercase tracking-wider text-slate-400">
                         {player.rarity}
                       </div>
+                      {(player.altPositions ?? []).length > 0 && (
+                        <div className="mt-1 text-xs text-slate-300">
+                          Alts: {player.altPositions?.join(", ")}
+                        </div>
+                      )}
                       {activeSlot && (
                         <div className="mt-1 text-xs text-slate-200">
                           In this slot: {previewOvr}

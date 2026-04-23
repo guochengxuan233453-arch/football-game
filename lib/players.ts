@@ -18,6 +18,14 @@ export const players: BasePlayer[] = [
     rarity: "gold",
     walkoutType: "big",
     inPacks: true,
+    stats: {
+          pace: 86,
+          shooting: 91,
+          passing: 70,
+          dribbling: 80,
+          defending: 45,
+          physical: 88,
+        },
   },
   {
     baseId: "debruyne",
@@ -30,6 +38,14 @@ export const players: BasePlayer[] = [
     rarity: "gold",
     walkoutType: "big",
     inPacks: true,
+    stats: {
+          pace: 66,
+          shooting: 83,
+          passing: 92,
+          dribbling: 84,
+          defending: 65,
+          physical: 72,
+        },
   },
   {
     baseId: "foden",
@@ -42,6 +58,14 @@ export const players: BasePlayer[] = [
     rarity: "gold",
     walkoutType: "normal",
     inPacks: true,
+    stats: {
+          pace: 81,
+          shooting: 88,
+          passing: 75,
+          dribbling: 84,
+          defending: 51,
+          physical: 83,
+        },
   },
   {
     baseId: "saka",
@@ -54,6 +78,14 @@ export const players: BasePlayer[] = [
     rarity: "gold",
     walkoutType: "big",
     inPacks: true,
+    stats: {
+          pace: 84,
+          shooting: 82,
+          passing: 85,
+          dribbling: 88,
+          defending: 60,
+          physical: 73,
+        },
   },
   {
     baseId: "rice",
@@ -295,7 +327,14 @@ export const players: BasePlayer[] = [
     rarity: "icon",
     walkoutType: "big",
     inPacks: true,
-
+    stats: {
+      pace: 94,
+      shooting: 89,
+      passing: 91,
+      dribbling: 98,
+      defending: 40,
+      physical: 68,
+    }
   },
   {
     baseId: "neuer",
@@ -308,8 +347,20 @@ export const players: BasePlayer[] = [
     rarity: "icon",
     walkoutType: "big",
     inPacks: true,
-
-    
+    stats: {
+      pace: 63,
+      shooting: 1,
+      passing: 91,
+      dribbling: 1,
+      defending: 1,
+      physical: 1,
+      diving: 95,
+      handling: 93,
+      kicking: 97,
+      reflexes: 95,
+      speed: 63,
+      positioning: 96,
+    }
   },
   {
     baseId: "bale",
@@ -322,8 +373,14 @@ export const players: BasePlayer[] = [
     rarity: "icon",
     walkoutType: "big",
     inPacks: true,
-
-    
+    stats: {
+      pace: 98,
+      shooting: 87,
+      passing: 89,
+      dribbling: 90,
+      defending: 86,
+      physical: 89,
+    }
   },
   {
     baseId: "kroos",
@@ -336,8 +393,14 @@ export const players: BasePlayer[] = [
     rarity: "icon",
     walkoutType: "big",
     inPacks: true,
-
-    
+    stats: {
+      pace: 70,
+      shooting: 87,
+      passing: 97,
+      dribbling: 86,
+      defending: 72,
+      physical: 78,
+    }
   },
   {
     baseId: "pirlo",
@@ -350,8 +413,14 @@ export const players: BasePlayer[] = [
     rarity: "icon",
     walkoutType: "big",
     inPacks: true,
-
-    
+    stats: {
+      pace: 72,
+      shooting: 85,
+      passing: 99,
+      dribbling: 90,
+      defending: 68,
+      physical: 74,
+    }
   },
   {
     baseId: "campbell",
@@ -364,8 +433,14 @@ export const players: BasePlayer[] = [
     rarity: "icon",
     walkoutType: "big",
     inPacks: true,
-
-    
+    stats: {
+      pace: 80,
+      shooting: 45,
+      passing: 68,
+      dribbling: 62,
+      defending: 96,
+      physical: 95,
+    }
   },
   {
     baseId: "cafu",
@@ -378,36 +453,56 @@ export const players: BasePlayer[] = [
     rarity: "icon",
     walkoutType: "big",
     inPacks: true,
-
-    
+    stats: {
+      pace: 96,
+      shooting: 72,
+      passing: 90,
+      dribbling: 91,
+      defending: 91,
+      physical: 87,
+    }
   },
   {
     baseId: "gullit_95",
     name: "Gullit",
     rating: 95,
     position: "ST",
+    altPositions: ["CAM", "CM", "CDM", "RW", "LW", "CB"],
     nationFlag: "/flags/netherlands.png",
     clubLogo: "/clubs/icon.png",
     cardImage: "/cards/gullit_95.jpg",
     rarity: "icon",
     walkoutType: "big",
     inPacks: true,
-
-    
+    stats: {
+      pace: 87,
+      shooting: 90,
+      passing: 90,
+      dribbling: 90,
+      defending: 78,
+      physical: 92,
+    }
   },
   {
     baseId: "vieira",
     name: "Vieira",
     rating: 97,
     position: "CDM",
+    altPositions: ["CM"],
     nationFlag: "/flags/france.svg",
     clubLogo: "/clubs/icon.png",
     cardImage: "/cards/vieira.png",
     rarity: "icon",
     walkoutType: "big",
     inPacks: true,
-
-    
+    stats: {
+      pace: 87,
+      shooting: 80,
+      passing: 88,
+      dribbling: 85,
+      defending: 98,
+      physical: 97,
+    }
   },
   {
     baseId: "r9_92",
@@ -420,9 +515,16 @@ export const players: BasePlayer[] = [
     rarity: "icon",
     walkoutType: "big",
     inPacks: true,
+    stats: {
+      pace: 89,
+      shooting: 90,
+      passing: 78,
+      dribbling: 92,
+      defending: 45,
+      physical: 80,
+    }
+  }
 
-    
-  },
   
 
 
