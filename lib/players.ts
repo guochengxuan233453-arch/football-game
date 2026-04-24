@@ -572,6 +572,7 @@ export const players: BasePlayer[] = [
     name: "Michael Ballack",
     rating: 100,
     position: "CM",
+    altPositions: ["CDM"],
     nationFlag: "/flags/germany.png",
     clubLogo: "/clubs/icon.png",
     cardImage: "/cards/ballack_100.png",
