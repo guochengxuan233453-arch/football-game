@@ -577,7 +577,7 @@ export const players: BasePlayer[] = [
     cardImage: "/cards/ballack_100.png",
     rarity: "icon",
     walkoutType: "big",
-    inPacks: false,
+    inPacks: true,
     stats: {
       pace: 91,
       shooting: 99,
