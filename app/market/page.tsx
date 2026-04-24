@@ -113,8 +113,6 @@ export default function MarketPage() {
 
   doQuickSell(player)
 }
-
-
   function buyFromMarket(listingId: string) {
     const listing = market.find((l) => l.listingId === listingId)
     if (!listing) return
