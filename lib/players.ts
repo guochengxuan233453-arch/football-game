@@ -573,7 +573,7 @@ export const players: BasePlayer[] = [
     rating: 100,
     position: "CM",
     altPositions: ["CDM"],
-    nationFlag: "/flags/germany.png",
+    nationFlag: "/flags/germany.svg",
     clubLogo: "/clubs/icon.png",
     cardImage: "/cards/ballack_100.png",
     rarity: "icon",
