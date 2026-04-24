@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { getSquad } from "@/lib/storage"
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -18,6 +19,11 @@ import {
   quickSellPlayer,
   refreshAiMarket,
 } from "@/lib/market"
+
+function getSquadIds() {
+  const squad = getSquad()
+  return new Set(Object.values(squad.slots).filter(Boolean) as string[])
+}
 
 function formatTime(ms: number) {
   const total = Math.max(0, Math.floor(ms / 1000))
@@ -91,13 +97,23 @@ export default function MarketPage() {
   }
 
   function handleQuickSell(player: InventoryPlayer) {
-    if (player.rarity === "icon") {
-      setConfirmQuickSellPlayer(player)
-      return
-    }
+  const squadIds = getSquadIds()
 
-    doQuickSell(player)
+  // 🚫 BLOCK SELLING IF IN SQUAD
+  if (squadIds.has(player.id)) {
+    alert("You cannot quick sell a player that is in your squad.")
+    return
   }
+
+  // ⚠️ ICON CONFIRM (unchanged)
+  if (player.rarity === "icon") {
+    setConfirmQuickSellPlayer(player)
+    return
+  }
+
+  doQuickSell(player)
+}
+
 
   function buyFromMarket(listingId: string) {
     const listing = market.find((l) => l.listingId === listingId)

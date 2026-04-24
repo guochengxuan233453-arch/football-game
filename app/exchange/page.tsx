@@ -6,8 +6,11 @@ import { useEffect, useMemo, useState } from "react"
 import {
   getInventory,
   saveInventory,
+  getSquad,
   type InventoryPlayer,
 } from "@/lib/storage"
+
+type RevealStage = "idle" | "tunnel" | "flag" | "position" | "club" | "card"
 
 type ExchangeRequirement = {
   rating: number
@@ -167,7 +170,7 @@ const exchangeRecipes: ExchangeRecipe[] = [
         name: "Cruyff",
         rating: 98,
         position: "ST",
-        nationFlag: "/flags/netherlands.svg",
+        nationFlag: "/flags/netherlands.png",
         clubLogo: "/clubs/icon.png",
         cardImage: "/cards/cruyff98.png",
         rarity: "icon",
@@ -194,19 +197,28 @@ function getRequirementSummary(requirements: ExchangeRequirement[]) {
   return requirements.map((req) => `${req.count} x ${req.rating}`).join(" + ")
 }
 
+function getSquadIds() {
+  const squad = getSquad()
+  return new Set(Object.values(squad.slots).filter(Boolean) as string[])
+}
+
 export default function ExchangePage() {
   const [inventory, setInventory] = useState<InventoryPlayer[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [message, setMessage] = useState("")
   const [reward, setReward] = useState<InventoryPlayer | null>(null)
-  const [selectedExchangeId, setSelectedExchangeId] = useState<string>(exchangeRecipes[0].id)
+  const [stage, setStage] = useState<RevealStage>("idle")
+  const [selectedExchangeId, setSelectedExchangeId] = useState(exchangeRecipes[0].id)
 
   useEffect(() => {
     setInventory(getInventory())
   }, [])
 
+  const squadIds = useMemo(() => getSquadIds(), [inventory])
+
   const selectedExchange =
-    exchangeRecipes.find((exchange) => exchange.id === selectedExchangeId) ?? exchangeRecipes[0]
+    exchangeRecipes.find((exchange) => exchange.id === selectedExchangeId) ??
+    exchangeRecipes[0]
 
   const selectedPlayers = useMemo(
     () => inventory.filter((p) => selectedIds.includes(p.id)),
@@ -219,8 +231,11 @@ export default function ExchangePage() {
   )
 
   const eligiblePlayers = useMemo(
-    () => inventory.filter((p) => requiredRatings.includes(p.rating)),
-    [inventory, requiredRatings]
+    () =>
+      inventory.filter(
+        (p) => requiredRatings.includes(p.rating) && !squadIds.has(p.id)
+      ),
+    [inventory, requiredRatings, squadIds]
   )
 
   const totalRequired = useMemo(
@@ -249,29 +264,106 @@ export default function ExchangePage() {
     return true
   }, [selectedPlayers, selectedExchange, totalRequired])
 
+  const revealActive =
+    stage === "tunnel" ||
+    stage === "flag" ||
+    stage === "position" ||
+    stage === "club" ||
+    stage === "card"
+
   function changeExchange(exchangeId: string) {
     setSelectedExchangeId(exchangeId)
     setSelectedIds([])
     setMessage("")
     setReward(null)
+    setStage("idle")
   }
 
   function togglePlayer(id: string) {
     setMessage("")
     setReward(null)
 
+    if (squadIds.has(id)) {
+      setMessage("You cannot use players that are in your squad.")
+      return
+    }
+
     setSelectedIds((prev) => {
-      if (prev.includes(id)) {
-        return prev.filter((x) => x !== id)
-      }
+      if (prev.includes(id)) return prev.filter((x) => x !== id)
+
+      const player = inventory.find((p) => p.id === id)
+      if (!player) return prev
+
+      const req = selectedExchange.requirements.find((r) => r.rating === player.rating)
+      if (!req) return prev
+
+      const alreadyForRating = prev
+        .map((pid) => inventory.find((p) => p.id === pid))
+        .filter((p): p is InventoryPlayer => Boolean(p))
+        .filter((p) => p.rating === player.rating).length
+
+      if (alreadyForRating >= req.count) return prev
       if (prev.length >= totalRequired) return prev
+
       return [...prev, id]
     })
+  }
+
+  function autoAddPlayers() {
+    setMessage("")
+    setReward(null)
+
+    const chosen: string[] = []
+
+    for (const req of selectedExchange.requirements) {
+      const playersForReq = eligiblePlayers
+        .filter((p) => p.rating === req.rating && !chosen.includes(p.id))
+        .slice(0, req.count)
+
+      chosen.push(...playersForReq.map((p) => p.id))
+    }
+
+    setSelectedIds(chosen)
+
+    const missing = selectedExchange.requirements
+      .map((req) => {
+        const count = chosen
+          .map((id) => inventory.find((p) => p.id === id))
+          .filter((p): p is InventoryPlayer => Boolean(p))
+          .filter((p) => p.rating === req.rating).length
+
+        return count < req.count ? `${req.count - count} more ${req.rating}` : null
+      })
+      .filter(Boolean)
+
+    if (missing.length > 0) {
+      setMessage(`Auto Add incomplete. Missing: ${missing.join(", ")}.`)
+    } else {
+      setMessage("Auto Add complete.")
+    }
+  }
+
+  function startReveal() {
+    setStage("tunnel")
+    setTimeout(() => setStage("flag"), 1700)
+    setTimeout(() => setStage("position"), 2900)
+    setTimeout(() => setStage("club"), 4100)
+    setTimeout(() => setStage("card"), 5400)
+  }
+
+  function resetReveal() {
+    setStage("idle")
+    setReward(null)
   }
 
   function doExchange() {
     if (!canExchange) {
       setMessage(`You need exactly ${getRequirementSummary(selectedExchange.requirements)}.`)
+      return
+    }
+
+    if (selectedIds.some((id) => squadIds.has(id))) {
+      setMessage("You cannot use players that are in your squad.")
       return
     }
 
@@ -291,17 +383,18 @@ export default function ExchangePage() {
     setSelectedIds([])
     setReward(newReward)
     setMessage(`Exchange complete. You received ${newReward.name}!`)
+    startReveal()
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_25%),linear-gradient(to_bottom,#020617,#000000)] text-white">
+    <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_25%),linear-gradient(to_bottom,#020617,#000000)] text-white">
       <div className="mx-auto max-w-7xl px-6 py-8">
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur">
           <div>
             <p className="text-sm uppercase tracking-[0.35em] text-cyan-300">Exchange</p>
             <h1 className="text-3xl font-black">Player Exchanges</h1>
             <p className="mt-1 text-slate-300">
-              Switch between different exchange recipes and trade players for rewards.
+              Auto add fodder, protect squad players, and reveal rewards.
             </p>
           </div>
 
@@ -335,15 +428,26 @@ export default function ExchangePage() {
 
         <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <section className="rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <h2 className="text-2xl font-black">Eligible Players</h2>
-            <p className="mt-2 text-slate-400">
-              Current exchange: {selectedExchange.name}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-black">Eligible Players</h2>
+                <p className="mt-2 text-slate-400">
+                  Squad players are locked and cannot be used.
+                </p>
+              </div>
+
+              <button
+                onClick={autoAddPlayers}
+                className="rounded-2xl border border-cyan-300/40 bg-cyan-300/10 px-5 py-3 font-black text-cyan-200 transition hover:bg-cyan-300/20"
+              >
+                Auto Add
+              </button>
+            </div>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {eligiblePlayers.length === 0 && (
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-slate-400">
-                  You do not have any players that fit this exchange.
+                  You do not have any usable players that fit this exchange.
                 </div>
               )}
 
@@ -394,15 +498,12 @@ export default function ExchangePage() {
             <div className="mt-6 space-y-3">
               {selectedPlayers.length === 0 && (
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-slate-400">
-                  Select the required players.
+                  Select the required players or use Auto Add.
                 </div>
               )}
 
               {selectedPlayers.map((player) => (
-                <div
-                  key={player.id}
-                  className="rounded-2xl border border-white/10 bg-black/20 p-4"
-                >
+                <div key={player.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
                   <div className="font-black">{player.name}</div>
                   <div className="text-sm text-slate-300">
                     {player.rating} • {player.position}
@@ -421,35 +522,113 @@ export default function ExchangePage() {
 
             <button
               onClick={doExchange}
-              className="mt-6 w-full rounded-2xl bg-cyan-400 px-6 py-4 font-black text-slate-950 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!canExchange}
+              className="mt-6 w-full rounded-2xl bg-cyan-400 px-6 py-4 font-black text-slate-950 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Exchange for {selectedExchange.rewardOvr} Player
             </button>
 
             {message && <p className="mt-4 text-slate-300">{message}</p>}
-
-            {reward && (
-              <div className="mt-6 rounded-2xl border border-cyan-300/30 bg-cyan-300/10 p-4 text-center">
-                <div className="mb-3 font-black">New Reward</div>
-                <div className="flex justify-center">
-                  <Image
-                    src={reward.cardImage}
-                    alt={reward.name}
-                    width={120}
-                    height={170}
-                    className="rounded-xl"
-                  />
-                </div>
-                <div className="mt-3 text-lg font-black">{reward.name}</div>
-                <div className="text-slate-300">
-                  {reward.rating} • {reward.position}
-                </div>
-              </div>
-            )}
           </aside>
         </div>
       </div>
+
+      {revealActive && reward && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black px-4">
+          <div className="relative h-[640px] w-full max-w-6xl overflow-hidden rounded-[28px]">
+            <div className="absolute inset-0 scale-110 animate-[tunnelPush_5.6s_linear_forwards]">
+              <Image
+                src="/backgrounds/tunnel.jpg"
+                alt="Tunnel background"
+                fill
+                priority
+                className="object-cover"
+              />
+            </div>
+
+            <div className="absolute inset-0 bg-black/30" />
+
+            {stage === "tunnel" && (
+              <div className="absolute inset-0 flex items-end justify-center pb-10">
+                <div className="rounded-full border border-white/15 bg-black/35 px-6 py-3 text-sm uppercase tracking-[0.45em] text-white/80 backdrop-blur">
+                  Walkout...
+                </div>
+              </div>
+            )}
+
+            {stage === "flag" && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="rounded-3xl border border-white/10 bg-black/30 p-6 shadow-2xl backdrop-blur">
+                  <Image
+                    src={reward.nationFlag}
+                    alt="Nation flag"
+                    width={220}
+                    height={140}
+                    className="rounded-xl object-contain"
+                  />
+                </div>
+              </div>
+            )}
+
+            {stage === "position" && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="rounded-3xl border border-white/10 bg-black/30 px-16 py-10 text-center shadow-2xl backdrop-blur">
+                  <div className="text-8xl font-black tracking-wider text-white">
+                    {reward.position}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {stage === "club" && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="rounded-3xl border border-white/10 bg-black/30 p-8 shadow-2xl backdrop-blur">
+                  <Image
+                    src={reward.clubLogo}
+                    alt="Club badge"
+                    width={180}
+                    height={180}
+                    className="object-contain"
+                  />
+                </div>
+              </div>
+            )}
+
+            {stage === "card" && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <Image
+                  src={reward.cardImage}
+                  alt={reward.name}
+                  width={340}
+                  height={500}
+                  priority
+                  className="rounded-[28px] shadow-[0_0_70px_rgba(255,255,255,0.22)]"
+                />
+
+                <div className="mt-8 flex gap-4">
+                  <button
+                    onClick={resetReveal}
+                    className="rounded-2xl border border-white/15 bg-white/5 px-6 py-3 font-bold text-white transition hover:bg-white/10"
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <style jsx global>{`
+        @keyframes tunnelPush {
+          0% {
+            transform: scale(1.1) translateY(0px);
+          }
+          100% {
+            transform: scale(1.24) translateY(-12px);
+          }
+        }
+      `}</style>
     </main>
   )
 }
