@@ -156,6 +156,38 @@ const exchangeRecipes: ExchangeRecipe[] = [
     ],
   },
   {
+    id: "exchange_99_winger",
+    name: "Exchange 99 Kylian Mbappé",
+    rewardOvr: 98,
+    description: "Trade 15 x 97 player and 7 x 96 player for a 98 forward.",
+    requirements: [
+      { rating: 97, count: 15 },
+      { rating: 96, count: 7 },
+    ],
+    rewards: [
+      {
+        baseId: "mbappe_99",
+        name: "Mbappé",
+        rating: 99,
+        position: "LW",
+        nationFlag: "/flags/france.svg",
+        clubLogo: "/clubs/Real_Madrid.svg",
+        cardImage: "/cards/mbappe_99.png",
+        rarity: "icon",
+        walkoutType: "big",
+        stats: {
+          pace: 99,
+          shooting: 97,
+          passing: 81,
+          dribbling: 98,
+          defending: 39,
+          physical: 87,
+        },
+        inPacks: false,
+      },
+    ],
+  },
+  {
     id: "exchange_98_creator",
     name: "Exchange 98 Maldini",
     rewardOvr: 98,
