@@ -567,6 +567,26 @@ export const players: BasePlayer[] = [
       physical: 93,
     }
   },
+  {
+    baseId: "ballack_100",
+    name: "Michael Ballack",
+    rating: 100,
+    position: "CM",
+    nationFlag: "/flags/germany.png",
+    clubLogo: "/clubs/icon.png",
+    cardImage: "/cards/ballack_100.png",
+    rarity: "icon",
+    walkoutType: "big",
+    inPacks: false,
+    stats: {
+      pace: 91,
+      shooting: 99,
+      passing: 99,
+      dribbling: 95,
+      defending: 93,
+      physical: 99,
+    }
+  },
 
 
 

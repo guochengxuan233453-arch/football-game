@@ -56,7 +56,14 @@ export const redeemCodes: RedeemCodeEntry[] = [
     rewards: [
       { type: "player", baseId: "torres_99" },
     ]
-  }
+  },
+  {
+  code: "ballack100overall",
+  rewards: [
+    { type: "player", baseId: "ballack_100" },
+    
+  ],
+  },
 ]
 
 function getUsedCodes(): string[] {
