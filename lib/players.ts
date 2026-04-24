@@ -553,7 +553,7 @@ export const players: BasePlayer[] = [
     rating: 94,
     position: "CB",
     nationFlag: "/flags/portugal.png",
-    clubLogo: "/clubs/mancity.png",
+    clubLogo: "/clubs/man_city.svg",
     cardImage: "/cards/ruben_94.jpg",
     rarity: "icon",
     walkoutType: "big",
