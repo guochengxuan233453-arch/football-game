@@ -52,18 +52,12 @@ export const redeemCodes: RedeemCodeEntry[] = [
   ],
   },
   {
-    code: "touleisi2.0",
+    code: "BALLACK100",
     rewards: [
-      { type: "player", baseId: "torres_99" },
+      { type: "player", baseId: "ballack_100" },
     ]
   },
-  {
-  code: "ballack100overall",
-  rewards: [
-    { type: "player", baseId: "ballack_100" },
-    
-  ],
-  },
+  
 ]
 
 function getUsedCodes(): string[] {
