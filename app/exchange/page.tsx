@@ -124,6 +124,38 @@ const exchangeRecipes: ExchangeRecipe[] = [
     ],
   },
   {
+    id: "exchange_99_defender",
+    name: "Exchange 99 Fabio Cannavaro",
+    rewardOvr: 98,
+    description: "Trade 13 x 97 player and 9 x 96 player for a 98 forward.",
+    requirements: [
+      { rating: 97, count: 13 },
+      { rating: 96, count: 9 },
+    ],
+    rewards: [
+      {
+        baseId: "cannavaro_99",
+        name: "Cannavaro",
+        rating: 99,
+        position: "CB",
+        nationFlag: "/flags/italy.png",
+        clubLogo: "/clubs/icon.png",
+        cardImage: "/cards/cannavaro_99.png",
+        rarity: "icon",
+        walkoutType: "big",
+        stats: {
+          pace: 89,
+          shooting: 51,
+          passing: 76,
+          dribbling: 73,
+          defending: 99,
+          physical: 94,
+        },
+        inPacks: false,
+      },
+    ],
+  },
+  {
     id: "exchange_98_creator",
     name: "Exchange 98 Maldini",
     rewardOvr: 98,
@@ -187,6 +219,7 @@ const exchangeRecipes: ExchangeRecipe[] = [
       },
     ],
   },
+  
 ]
 
 function randomReward(rewards: Omit<InventoryPlayer, "id">[]) {
