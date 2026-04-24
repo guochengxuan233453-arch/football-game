@@ -51,7 +51,12 @@ export const redeemCodes: RedeemCodeEntry[] = [
     
   ],
   },
-  
+  {
+    code: "touleisi2.0",
+    rewards: [
+      { type: "player", baseId: "torres_99" },
+    ]
+  }
 ]
 
 function getUsedCodes(): string[] {
