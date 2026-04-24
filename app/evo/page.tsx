@@ -36,6 +36,7 @@ const evoRecipes: EvoRecipe[] = [
       name: "Gullit",
       rating: 99,
       position: "CM",
+      altPositions: ["CDM", "CAM", "CB", "LB", "RB","RW","LW"],
       nationFlag: "/flags/netherlands.png",
       clubLogo: "/clubs/icon.png",
       cardImage: "/cards/gullit_99.png",

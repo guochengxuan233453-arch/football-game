@@ -321,6 +321,7 @@ export const players: BasePlayer[] = [
     name: "Neymar",
     rating: 96,
     position: "CAM",
+    altPositions: ["LW"],
     nationFlag: "/flags/brazil.svg",
     clubLogo: "/clubs/santos.png",
     cardImage: "/cards/neymar_founder.png",
@@ -530,6 +531,7 @@ export const players: BasePlayer[] = [
     name: "FernandoTorres",
     rating: 99,
     position: "ST",
+    altPositions: ["RW"],
     nationFlag: "/flags/spain.png",
     clubLogo: "/clubs/icon.png",
     cardImage: "/cards/torres_99.png",
@@ -543,6 +545,26 @@ export const players: BasePlayer[] = [
       dribbling: 96,
       defending: 45,
       physical: 87,
+    }
+  },
+  {
+    baseId: "ruben_94",
+    name: "Rúben Dias",
+    rating: 94,
+    position: "CB",
+    nationFlag: "/flags/portugal.png",
+    clubLogo: "/clubs/mancity.png",
+    cardImage: "/cards/ruben_94.jpg",
+    rarity: "icon",
+    walkoutType: "big",
+    inPacks: true,
+    stats: {
+      pace: 75,
+      shooting: 47,
+      passing: 82,
+      dribbling: 75,
+      defending: 95,
+      physical: 93,
     }
   },
 

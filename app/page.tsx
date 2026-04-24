@@ -134,7 +134,16 @@ export default function Home() {
                 Enter a code for coins and players.
               </p>
             </Link>
-
+          <Link
+              href="/arcade"
+              className="rounded-[28px] border border-white/10 bg-white/5 p-6 transition hover:border-cyan-300/60 hover:bg-cyan-300/10"
+            >
+              <div className="text-4xl">🎮</div>
+              <h2 className="mt-4 text-2xl font-black">Arcade Mode</h2>
+              <p className="mt-2 text-slate-300">
+                Play a 3D arcade football mode.
+              </p>
+            </Link>
         </div>
 
       </div>
