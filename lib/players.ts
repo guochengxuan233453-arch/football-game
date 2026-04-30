@@ -588,7 +588,47 @@ export const players: BasePlayer[] = [
       physical: 99,
     }
   },
-
+  {
+      baseId: "gullit_evo_99",
+      name: "Gullit",
+      rating: 99,
+      position: "CM",
+      altPositions: ["CDM", "CAM", "CB", "LB", "RB", "RW", "LW"],
+      nationFlag: "/flags/netherlands.png",
+      clubLogo: "/clubs/icon.png",
+      cardImage: "/cards/gullit_99.png",
+      rarity: "icon",
+      walkoutType: "big",
+      inPacks: false,
+      stats: {
+        pace: 99,
+        shooting: 96,
+        passing: 99,
+        dribbling: 98,
+        defending: 92,
+        physical: 96,
+      },
+    },
+    {
+      baseId: "r9_100",
+      name: "Ronaldo",
+      rating: 100,
+      position: "ST",
+      nationFlag: "/flags/brazil.svg",
+      clubLogo: "/clubs/icon.png",
+      cardImage: "/cards/r9_100.png",
+      rarity: "icon",
+      walkoutType: "big",
+      inPacks: false,
+      stats: {
+        pace: 100,
+        shooting: 100,
+        passing: 84,
+        dribbling: 100,
+        defending: 45,
+        physical: 89,
+      },
+    },
 
 
 ]

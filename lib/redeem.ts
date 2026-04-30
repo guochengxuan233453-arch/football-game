@@ -57,6 +57,13 @@ export const redeemCodes: RedeemCodeEntry[] = [
       { type: "player", baseId: "ballack_100" },
     ]
   },
+  {
+    code: "ALLEVOS",
+    rewards: [
+      { type: "player", baseId: "r9_100" },
+      {type: "player", baseId: "gullit_evo_99"}
+    ]
+  },
   
 ]
 

@@ -128,7 +128,7 @@ const exchangeRecipes: ExchangeRecipe[] = [
   {
     id: "exchange_99_defender",
     name: "Exchange 99 Fabio Cannavaro",
-    rewardOvr: 98,
+    rewardOvr: 99,
     description: "Trade 13 x 97 player and 9 x 96 player for a 99 centerback.",
     requirements: [
       { rating: 97, count: 13 },
@@ -160,7 +160,7 @@ const exchangeRecipes: ExchangeRecipe[] = [
   {
     id: "exchange_99_left_winger",
     name: "Exchange 99 Kylian Mbappé",
-    rewardOvr: 98,
+    rewardOvr: 99,
     description: "Trade 15 x 97 player and 7 x 96 player for a 99 LW.",
     requirements: [
       { rating: 97, count: 15 },
@@ -211,12 +211,12 @@ const exchangeRecipes: ExchangeRecipe[] = [
         rarity: "icon",
         walkoutType: "big",
         stats: {
-          pace: 88,
-          shooting: 96,
-          passing: 99,
-          dribbling: 95,
-          defending: 78,
-          physical: 88,
+          pace: 85,
+          shooting: 45,
+          passing: 82,
+          dribbling: 75,
+          defending: 99,
+          physical: 92,
         },
         inPacks: false,
       },
