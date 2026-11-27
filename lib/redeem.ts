@@ -64,7 +64,18 @@ export const redeemCodes: RedeemCodeEntry[] = [
       {type: "player", baseId: "gullit_evo_99"}
     ]
   },
-  
+  {
+    code: "ALLEXCHANGES",
+    rewards: [
+      { type: "player", baseId: "cristiano_99" },
+      {type: "player", baseId: "messi_99"},
+      {type: "player", baseId: "cannavaro_99"},
+      {type: "player", baseId: "mbappe_99"},
+      {type: "player", baseId: "cruyff_98"},
+      {type: "player", baseId: "zidane_99"},
+      {type: "player", baseId: "maldini_98"},
+    ]
+  },
 ]
 
 function getUsedCodes(): string[] {
