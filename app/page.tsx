@@ -152,6 +152,18 @@ export default function Home() {
               <h2 className="mt-4 text-2xl font-black">Tournament</h2>
               <p className="mt-2 text-slate-300">Play classic UCL campaigns.</p>
             </Link>
+          <Link
+  href="/multiplayer"
+  className="rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:bg-white/10 hover:border-cyan-400"
+>
+  <h2 className="text-2xl font-black text-cyan-400">
+    Multiplayer
+  </h2>
+
+  <p className="mt-2 text-sm text-slate-300">
+    Play online against your friends using your own squad.
+  </p>
+</Link>
         </div>
 
       </div>
