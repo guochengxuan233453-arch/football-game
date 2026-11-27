@@ -1,3 +1,4 @@
+import type { PlayStyleEntry } from "./playStyles"
 export type PlayerStats = {
   pace: number
   shooting: number
@@ -30,6 +31,7 @@ export type InventoryPlayer = {
   stats?: PlayerStats
   inPacks?: boolean
   skill?: string
+  playStyles?: PlayStyleEntry[]
 }
 
 export type UserData = {

@@ -796,6 +796,27 @@ export const players: BasePlayer[] = [
         },
         inPacks: false,
       },
+      {
+        baseId: "neymar_99",
+        name: "Neymar Jr.",
+        rating: 99,
+        position: "CAM",
+        altPositions: ["LW", "RW"],
+        nationFlag: "/flags/brazil.svg",
+        clubLogo: "/clubs/psg.svg",
+        cardImage: "/cards/neymar99.png",
+        rarity: "icon",
+        walkoutType: "big",
+        stats: {
+          pace: 99,
+          shooting: 96,
+          passing: 97,
+          dribbling: 99,
+          defending: 60,
+          physical: 89,
+        },
+        inPacks: false,
+      },
 
 
 ]

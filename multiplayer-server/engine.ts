@@ -1,11 +1,12 @@
+import { normalizePlayStyles, style, type PlayStyleEntry } from "./playStyles"
 type Team = "user" | "ai"
 type Difficulty = "easy" | "medium" | "hard"
 type Role = "GK" | "CB" | "LB" | "RB" | "CM" | "CDM" | "CAM" | "LM" | "RM" | "LW" | "RW" | "ST"
 type Point = { x: number; y: number }
-type Card = { name:string; rating:number; position:string; altPositions?:string[]; stats:Record<string,number> }
+type Card = { playStyles?:PlayStyleEntry[]; name:string; rating:number; position:string; altPositions?:string[]; stats:Record<string,number> }
 type Slot = { key: string; role: Role; x: number; y: number }
 type Animation = "kick" | "slide" | "dive" | "celebrate"
-type Player = Point & { id: string; name: string; team: Team; role: Role; slot: string; home: Point; rating: number; pace: number; shooting: number; passing: number; dribbling: number; defending: number; physical: number; keeping: number; diving: number; handling: number; kicking: number; reflexes: number; keeperSpeed: number; positioning: number; squadRating: number; facing: number; stride: number; moving: boolean; skin: string; hair: string; number: number; hairStyle: number; action: Animation | null; actionTime: number }
+type Player = Point & { playStyles: PlayStyleEntry[]; id: string; name: string; team: Team; role: Role; slot: string; home: Point; rating: number; pace: number; shooting: number; passing: number; dribbling: number; defending: number; physical: number; keeping: number; diving: number; handling: number; kicking: number; reflexes: number; keeperSpeed: number; positioning: number; squadRating: number; facing: number; stride: number; moving: boolean; skin: string; hair: string; number: number; hairStyle: number; action: Animation | null; actionTime: number }
 type Flight = { vx: number; vy: number; curve: number; age: number; kicker: string; target: string | null; kind: "pass" | "shot"; checked: Set<string> }
 type Gesture = { start: Point; end: Point; first: Point | null; pointer: number; actor: string | null; mode: "attack" | "defend" }
 type Scene = "simulation" | "attack" | "defense" | "result" | "fulltime"
@@ -65,7 +66,7 @@ function makePlayer(s: Slot, team: Team, card: Card | undefined, ovr: number, in
   const x = (team === "user" ? s.x : 1-s.x)*W, y = (team === "user" ? s.y : 1-s.y)*H
   const diving=stat(card,"diving",rating),handling=stat(card,"handling",rating),kicking=stat(card,"kicking",rating),reflexes=stat(card,"reflexes",rating),positioning=stat(card,"positioning",rating),keeperSpeed=stat(card,"speed",stat(card,"pace",rating))
   const keep=(diving+handling+reflexes+positioning)/4
-  return {id:`${team}-${s.key}`,slot:s.key,role:s.role,name:card?.name ?? (team === "ai" ? `AI ${s.role}` : `Reserve ${s.role}`),team,x,y,home:{x,y},rating,
+  return {playStyles:normalizePlayStyles((card as {playStyles?:unknown}|undefined)?.playStyles),id:`${team}-${s.key}`,slot:s.key,role:s.role,name:card?.name ?? (team === "ai" ? `AI ${s.role}` : `Reserve ${s.role}`),team,x,y,home:{x,y},rating,
     pace:stat(card,"pace",rating),shooting:stat(card,"shooting",rating),passing:stat(card,"passing",rating),dribbling:stat(card,"dribbling",rating),defending:stat(card,"defending",rating),physical:stat(card,"physical",rating),keeping:keep,diving,handling,kicking,reflexes,keeperSpeed,positioning,squadRating:card?adjustedRating(card,s.role):team==="ai"?rating:0,
     facing:team === "user" ? -Math.PI/2 : Math.PI/2,stride:0,moving:false,skin:["#efbc91","#a96c45","#d79868","#79503a","#f5d0ac"][seed%5],hair:["#33291f","#201b19","#604127","#b58a41"][Math.floor(seed/7)%4],number:index+1,hairStyle:Math.floor(seed/13)%3,action:null,actionTime:0}
 }
@@ -121,23 +122,23 @@ function startChance(g:Match,team:Team){
   g.camera={x:MID,y:team==="user"?410:H-410};g.message=team==="user"?"Your chance!":"Defend your goal!"
 }
 function kick(g:Match,p:Player,dir:Point,speed:number,curve:number,kind:Flight["kind"],target:string|null=null){
-  p.moving=false;g.owner=null;g.carry=null;g.aim=null;g.lastTouch=p.team;g.actionCount++;g.possessionAge=0
+  speed*=kind==="pass"?1+.18*style(p,"pingedPass"):1+.15*style(p,"powerShot");p.moving=false;g.owner=null;g.carry=null;g.aim=null;g.lastTouch=p.team;g.actionCount++;g.possessionAge=0
   g.ball={x:p.x+dir.x*25,y:p.y+dir.y*25};p.facing=Math.atan2(dir.y,dir.x);animate(p,"kick",.32)
   g.flight={vx:dir.x*speed,vy:dir.y*speed,curve,age:0,kicker:p.id,target,kind,checked:new Set()};g.message=""
 }
 function pass(g:Match,p:Player,t:Player){
   let d=unit(t.x-p.x,t.y-p.y);const len=dist(p,t)
   const chance=passChance(p.role==="GK"?(p.passing+p.kicking)/2:p.passing,.56,Math.max(0,len-340)*.00023)
-  const success=Math.random()<chance
+  const success=Math.random()<1-(1-chance)*(1-.25*style(p,"incisivePass"))
   if(!success)d=rotate(d,rand(.12,.30)*(Math.random()<.5?-1:1))
   kick(g,p,d,clamp(len*1.55+180,420,1250),0,"pass",success?t.id:null)
   if(!success)g.message="Misplaced pass"
 }
 function laneRisk(g:Match,p:Player,to:Point){return teamOf(g,opposite(p.team)).reduce((n,q)=>n+(segDist(q,p,to)<50?110:segDist(q,p,to)<100?36:0),0)}
 function space(g:Match,t:Team,p:Point){return Math.min(430,...teamOf(g,opposite(t)).map(q=>dist(q,p)))}
-function tackleChance(def:Player,att:Player){return clamp(.5+(def.defending-att.dribbling)*.025,.10,.90)}
+function tackleChance(def:Player,att:Player){return clamp(.5+(def.defending-att.dribbling)*.025+.08*style(def,"anticipate")-.06*style(att,"pressProven"),.10,.90)}
 // Shoulder contact is a separate physical duel; sliding tackles stay DEF vs DRI.
-function physicalChance(def:Player,att:Player){return clamp(.5+(def.physical-att.physical)*.025,.10,.90)}
+function physicalChance(def:Player,att:Player){return clamp(.5+(def.physical-att.physical)*.025+.10*(style(def,"bruiser")-style(att,"bruiser"))-.06*style(att,"pressProven"),.10,.90)}
 function shoulderContact(att:Player,def:Player){
   const d=unit(def.x-att.x,def.y-att.y)
   return Math.abs(d.x*Math.cos(att.facing)+d.y*Math.sin(att.facing))<.60
@@ -211,13 +212,14 @@ function updateFlight(g:Match,dt:number){
   const decay=Math.exp(-.66*dt);f.vx*=decay;f.vy*=decay;f.curve*=Math.exp(-1.4*dt)
   const speed=Math.hypot(f.vx,f.vy)
   // Swept collision tests prevent fast shots going through players.
-  const hits=g.players.filter(p=>!(p.id===f.kicker&&f.age<.25)&&segDist(p,old,g.ball)<(p.role==="GK"?33:R+BR+4)&&!f.checked.has(p.id)).sort((a,b)=>dist(a,old)-dist(b,old))
+  const hits=g.players.filter(p=>!(p.id===f.kicker&&f.age<.25)&&segDist(p,old,g.ball)<(p.role==="GK"?33:R+BR+4+(p.team!==g.lastTouch?5*style(p,"intercept"):0))&&!f.checked.has(p.id)).sort((a,b)=>dist(a,old)-dist(b,old))
   for(const p of hits){
     if(p.id===f.kicker&&f.age<.45)continue
     if(f.kind==="shot"&&p.team===g.lastTouch&&p.role!=="GK")continue
     f.checked.add(p.id)
     const same=p.team===g.lastTouch
     let probability=p.role==="GK"?clamp(.28+p.keeping*.006-speed*.00017,.25,.88):same?clamp(.65+p.dribbling*.003-speed*.00012,.55,.98):clamp(.22+p.defending*.006-speed*.00016,.22,.86)
+    if(p.role==="GK")probability+=.08*style(p,"longReach");else if(same)probability+=.08*style(p,"firstTouch");else probability+=.10*style(p,"intercept")
     if(p.id===f.target)probability+=.18
     if(same&&p.role!=="GK"){
       const marker=nearest(g,opposite(p.team),p,false)
@@ -256,7 +258,7 @@ export function lineup(raw:unknown,team:Team):Player[]{
     const stats:Record<string,number>={}
     for(const key of ["pace","shooting","passing","dribbling","defending","physical","diving","handling","kicking","reflexes","positioning"])stats[key]=num(r[key],rating)
     stats.speed=num(r.keeperSpeed,rating)
-    const p=makePlayer(s,team,{name:String(r.name??s.role).slice(0,48),rating,position:s.role,stats},rating,i)
+    const p=makePlayer(s,team,{name:String(r.name??s.role).slice(0,48),rating,position:s.role,stats,playStyles:normalizePlayStyles(r.playStyles)},rating,i)
     p.squadRating=r.squadRating===0?0:num(r.squadRating,rating)
     return p
   })
@@ -287,7 +289,7 @@ export function tickOnline(g:Match,dt:number){
     // The defender may still act while the attacker decides.
     if(!g.tackle)return
   }
-  if(p&&g.carry){p.moving=true;const done=move(p,g.carry,70+p.pace*1.48,dt);setBallAtFeet(g,p);if(done){g.carry=null;g.possessionAge=0}}
+  if(p&&g.carry){p.moving=true;const done=move(p,g.carry,(70+p.pace*1.48)*(1+.10*style(p,"quickStep")),dt);setBallAtFeet(g,p);if(done){g.carry=null;g.possessionAge=0}}
   if(g.carry||g.flight)offBall(g,dt)
   const current=ownerOf(g)
   if(current&&current.moving&&!g.tackle){const q=nearest(g,opposite(current.team),current);if(q&&dist(q,current)<R*2+9){if(shoulderContact(current,q))resolveShoulder(g,q,current);else resolveTackle(g,q,current)}}
@@ -313,8 +315,8 @@ export function action(g:Match,team:Team,raw:unknown){
     const v=point(a.dir);if(!v||Math.hypot(v.x,v.y)<.1||typeof a.power!=="number"||!Number.isFinite(a.power)||typeof a.curve!=="number"||!Number.isFinite(a.curve))return false
     let d=unit(v.x,v.y),curve=clamp(a.curve,-1.35,1.35);const power=clamp(a.power,.12,1),goalY=team==="user"?0:H,goalX=d.y*forward(team)>.04?p.x+d.x*(goalY-p.y)/d.y:Infinity
     const shot=d.y*forward(team)>.15&&Math.abs(p.y-goalY)<720&&Math.abs(goalX-MID)<GOAL*.85+Math.abs(curve)*150
-    if(shot){d=rotate(d,rand(-1,1)*shotError(p.shooting));kick(g,p,d,700+power*(690+p.shooting*3),curve,"shot")}
-    else{const success=Math.random()<passChance(p.role==="GK"?(p.passing+p.kicking)/2:p.passing,.42);if(!success)curve=0;const end=point(a.target)??{x:p.x+d.x*300,y:p.y+d.y*300};const receiver=teamOf(g,team).filter(q=>q.id!==p.id&&dist(q,end)<175&&((q.x-p.x)*d.x+(q.y-p.y)*d.y)>40).sort((q,r)=>dist(q,end)-dist(r,end))[0];kick(g,p,d,330+power*(870+(p.role==="GK"?(p.kicking-80)*2:0)),curve,"pass",success?receiver?.id??null:null);if(!success)g.message="Poor pass — no curve"}
+    if(shot){d=rotate(d,rand(-1,1)*shotError(p.shooting)*(1-.30*style(p,"finesseShot")));kick(g,p,d,700+power*(690+p.shooting*3),curve,"shot")}
+    else{const success=Math.random()<1-(1-passChance(p.role==="GK"?(p.passing+p.kicking)/2:p.passing,.42))*(1-.25*style(p,"incisivePass"));if(!success)curve=0;const end=point(a.target)??{x:p.x+d.x*300,y:p.y+d.y*300};const receiver=teamOf(g,team).filter(q=>q.id!==p.id&&dist(q,end)<175&&((q.x-p.x)*d.x+(q.y-p.y)*d.y)>40).sort((q,r)=>dist(q,end)-dist(r,end))[0];kick(g,p,d,330+power*(870+(p.role==="GK"?(p.kicking-80)*2:0)),curve,"pass",success?receiver?.id??null:null);if(!success)g.message="Poor pass — no curve"}
     return true
   }return false
 }

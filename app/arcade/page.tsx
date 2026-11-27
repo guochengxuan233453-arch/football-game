@@ -1,5 +1,6 @@
 "use client"
 
+import { normalizePlayStyles, style, styleName, type PlayStyleEntry } from "@/lib/playStyles"
 import Link from "next/link"
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import { getInventory, getSquad } from "@/lib/storage"
@@ -12,7 +13,7 @@ type Point = { x: number; y: number }
 type Card = ReturnType<typeof getInventory>[number]
 type Slot = { key: string; role: Role; x: number; y: number }
 type Animation = "kick" | "slide" | "dive" | "celebrate"
-type Player = Point & { id: string; name: string; team: Team; role: Role; slot: string; home: Point; rating: number; pace: number; shooting: number; passing: number; dribbling: number; defending: number; physical: number; keeping: number; diving: number; handling: number; kicking: number; reflexes: number; keeperSpeed: number; positioning: number; squadRating: number; facing: number; stride: number; moving: boolean; skin: string; hair: string; number: number; hairStyle: number; action: Animation | null; actionTime: number }
+type Player = Point & { playStyles: PlayStyleEntry[]; id: string; name: string; team: Team; role: Role; slot: string; home: Point; rating: number; pace: number; shooting: number; passing: number; dribbling: number; defending: number; physical: number; keeping: number; diving: number; handling: number; kicking: number; reflexes: number; keeperSpeed: number; positioning: number; squadRating: number; facing: number; stride: number; moving: boolean; skin: string; hair: string; number: number; hairStyle: number; action: Animation | null; actionTime: number }
 type Flight = { vx: number; vy: number; curve: number; age: number; kicker: string; target: string | null; kind: "pass" | "shot"; checked: Set<string> }
 type Gesture = { start: Point; end: Point; first: Point | null; pointer: number; actor: string | null; mode: "attack" | "defend" }
 type Scene = "simulation" | "attack" | "defense" | "result" | "fulltime"
@@ -72,7 +73,7 @@ function makePlayer(s: Slot, team: Team, card: Card | undefined, ovr: number, in
   const x = s.x*W, y = (team === "user" ? s.y : 1-s.y)*H
   const diving=stat(card,"diving",rating),handling=stat(card,"handling",rating),kicking=stat(card,"kicking",rating),reflexes=stat(card,"reflexes",rating),positioning=stat(card,"positioning",rating),keeperSpeed=stat(card,"speed",stat(card,"pace",rating))
   const keep=(diving+handling+reflexes+positioning)/4
-  return {id:`${team}-${s.key}`,slot:s.key,role:s.role,name:card?.name ?? (team === "ai" ? `AI ${s.role}` : `Reserve ${s.role}`),team,x,y,home:{x,y},rating,
+  return {playStyles:normalizePlayStyles((card as {playStyles?:unknown}|undefined)?.playStyles),id:`${team}-${s.key}`,slot:s.key,role:s.role,name:card?.name ?? (team === "ai" ? `AI ${s.role}` : `Reserve ${s.role}`),team,x,y,home:{x,y},rating,
     pace:stat(card,"pace",rating),shooting:stat(card,"shooting",rating),passing:stat(card,"passing",rating),dribbling:stat(card,"dribbling",rating),defending:stat(card,"defending",rating),physical:stat(card,"physical",rating),keeping:keep,diving,handling,kicking,reflexes,keeperSpeed,positioning,squadRating:card?adjustedRating(card,s.role):team==="ai"?rating:0,
     facing:team === "user" ? -Math.PI/2 : Math.PI/2,stride:0,moving:false,skin:["#efbc91","#a96c45","#d79868","#79503a","#f5d0ac"][seed%5],hair:["#33291f","#201b19","#604127","#b58a41"][Math.floor(seed/7)%4],number:index+1,hairStyle:Math.floor(seed/13)%3,action:null,actionTime:0}
 }
@@ -156,14 +157,14 @@ function startChance(g:Match,team:Team){
   g.camera={x:MID,y:team==="user"?410:H-410};g.message=team==="user"?"Your chance!":"Defend your goal!"
 }
 function kick(g:Match,p:Player,dir:Point,speed:number,curve:number,kind:Flight["kind"],target:string|null=null){
-  p.moving=false;g.owner=null;g.carry=null;g.aim=null;g.lastTouch=p.team;g.actionCount++;g.possessionAge=0
+  speed*=kind==="pass"?1+.18*style(p,"pingedPass"):1+.15*style(p,"powerShot");p.moving=false;g.owner=null;g.carry=null;g.aim=null;g.lastTouch=p.team;g.actionCount++;g.possessionAge=0
   g.ball={x:p.x+dir.x*25,y:p.y+dir.y*25};p.facing=Math.atan2(dir.y,dir.x);animate(p,"kick",.32)
   g.flight={vx:dir.x*speed,vy:dir.y*speed,curve,age:0,kicker:p.id,target,kind,checked:new Set()};g.message=""
 }
 function pass(g:Match,p:Player,t:Player){
   let d=unit(t.x-p.x,t.y-p.y);const len=dist(p,t)
   const chance=passChance(p.role==="GK"?(p.passing+p.kicking)/2:p.passing,.56,Math.max(0,len-340)*.00023)
-  const success=Math.random()<chance
+  const success=Math.random()<1-(1-chance)*(1-.25*style(p,"incisivePass"))
   if(!success)d=rotate(d,rand(.12,.30)*(Math.random()<.5?-1:1))
   kick(g,p,d,clamp(len*1.55+180,420,1250),0,"pass",success?t.id:null)
   if(!success)g.message="Misplaced pass"
@@ -176,7 +177,7 @@ function aiDecision(g:Match,p:Player){
   if(gap<470&&Math.abs(p.x-MID)<350&&(g.decisions>2||laneRisk(g,p,{x:MID,y:H})<140||gap<210)){
     const side=(keeper?.x??MID)>MID?-1:1
     const aim={x:MID+side*(GOAL*.34)+rand(-25,25),y:H+30}
-    const dir=rotate(unit(aim.x-p.x,aim.y-p.y),rand(-1,1)*shotError(p.shooting)*.75)
+    const dir=rotate(unit(aim.x-p.x,aim.y-p.y),rand(-1,1)*shotError(p.shooting)*(1-.30*style(p,"finesseShot"))*.75)
     kick(g,p,dir,1120+p.shooting*3,0,"shot");return
   }
   const choices=teamOf(g,"ai").filter(q=>q.id!==p.id&&q.role!=="GK"&&dist(p,q)<790&&q.y>p.y+50)
@@ -188,9 +189,9 @@ function aiDecision(g:Match,p:Player){
   options.sort((a,b)=>(space(g,"ai",b)-laneRisk(g,p,b)*.45)-(space(g,"ai",a)-laneRisk(g,p,a)*.45))
   g.carry=options[0];g.decisions++;g.aiWait=cfg.reaction
 }
-function tackleChance(def:Player,att:Player){return clamp(.5+(def.defending-att.dribbling)*.025,.10,.90)}
+function tackleChance(def:Player,att:Player){return clamp(.5+(def.defending-att.dribbling)*.025+.08*style(def,"anticipate")-.06*style(att,"pressProven"),.10,.90)}
 // Shoulder contact is a separate physical duel; sliding tackles stay DEF vs DRI.
-function physicalChance(def:Player,att:Player){return clamp(.5+(def.physical-att.physical)*.025,.10,.90)}
+function physicalChance(def:Player,att:Player){return clamp(.5+(def.physical-att.physical)*.025+.10*(style(def,"bruiser")-style(att,"bruiser"))-.06*style(att,"pressProven"),.10,.90)}
 function shoulderContact(att:Player,def:Player){
   const d=unit(def.x-att.x,def.y-att.y)
   return Math.abs(d.x*Math.cos(att.facing)+d.y*Math.sin(att.facing))<.60
@@ -266,13 +267,14 @@ function updateFlight(g:Match,dt:number){
   const decay=Math.exp(-.66*dt);f.vx*=decay;f.vy*=decay;f.curve*=Math.exp(-1.4*dt)
   const speed=Math.hypot(f.vx,f.vy)
   // Swept collision tests prevent fast shots going through players.
-  const hits=g.players.filter(p=>!(p.id===f.kicker&&f.age<.25)&&segDist(p,old,g.ball)<(p.role==="GK"?33:R+BR+4)&&!f.checked.has(p.id)).sort((a,b)=>dist(a,old)-dist(b,old))
+  const hits=g.players.filter(p=>!(p.id===f.kicker&&f.age<.25)&&segDist(p,old,g.ball)<(p.role==="GK"?33:R+BR+4+(p.team!==g.lastTouch?5*style(p,"intercept"):0))&&!f.checked.has(p.id)).sort((a,b)=>dist(a,old)-dist(b,old))
   for(const p of hits){
     if(p.id===f.kicker&&f.age<.45)continue
     if(f.kind==="shot"&&p.team===g.lastTouch&&p.role!=="GK")continue
     f.checked.add(p.id)
     const same=p.team===g.lastTouch
     let probability=p.role==="GK"?clamp(.28+p.keeping*.006-speed*.00017,.25,.88):same?clamp(.65+p.dribbling*.003-speed*.00012,.55,.98):clamp(.22+p.defending*.006-speed*.00016,.22,.86)
+    if(p.role==="GK")probability+=.08*style(p,"longReach");else if(same)probability+=.08*style(p,"firstTouch");else probability+=.10*style(p,"intercept")
     if(p.id===f.target)probability+=.18
     if(same&&p.role!=="GK"){
       const marker=nearest(g,opposite(p.team),p,false)
@@ -319,7 +321,7 @@ function tick(g:Match,dt:number){
   if(p){
     g.possessionAge+=dt
     if(g.carry){
-      const target=g.carry;const done=move(p,target,70+p.pace*1.48,dt);setBallAtFeet(g,p)
+      const target=g.carry;const done=move(p,target,(70+p.pace*1.48)*(1+.10*style(p,"quickStep")),dt);setBallAtFeet(g,p)
       if(done){g.carry=null;g.aiWait=.1}
     }
     if(p.team==="ai"&&!g.carry){g.aiWait-=dt;if(g.aiWait<=0){aiDecision(g,p)}}
@@ -489,10 +491,10 @@ function paint(g:Match,ctx:CanvasRenderingContext2D,w:number,h:number,v:View,cur
   if(w>680){const rw=77,rh=112,rx=14,ry=h-rh-14;ctx.fillStyle="rgba(14,33,23,.75)";ctx.fillRect(rx,ry,rw,rh);ctx.strokeStyle="#a8c8a0";ctx.lineWidth=1;ctx.strokeRect(rx+4,ry+4,rw-8,rh-8);ctx.beginPath();ctx.moveTo(rx+4,ry+rh/2);ctx.lineTo(rx+rw-4,ry+rh/2);ctx.stroke();for(const p of g.players){ctx.fillStyle=p.team==="user"?"#7da8ff":"#ffad67";ctx.fillRect(rx+4+p.x/W*(rw-8)-2,ry+4+p.y/H*(rh-8)-2,4,4)}ctx.fillStyle="#fff";ctx.fillRect(rx+4+g.ball.x/W*(rw-8)-1.5,ry+4+g.ball.y/H*(rh-8)-1.5,3,3)}
 }
 
-type StatPanelData = {name:string;role:Role;rating:number;stats:{label:string;value:number}[]}
+type StatPanelData = {playStyles:PlayStyleEntry[];name:string;role:Role;rating:number;stats:{label:string;value:number}[]}
 function panelData(p:Player):StatPanelData{
   const stats=p.role==="GK"?[["DIV",p.diving],["HAN",p.handling],["KIC",p.kicking],["REF",p.reflexes],["SPD",p.keeperSpeed],["POS",p.positioning]]:[["PAC",p.pace],["SHO",p.shooting],["PAS",p.passing],["DRI",p.dribbling],["DEF",p.defending],["PHY",p.physical]]
-  return {name:p.name,role:p.role,rating:p.rating,stats:stats.map(([label,value])=>({label:String(label),value:Number(value)}))}
+  return {playStyles:p.playStyles??[],name:p.name,role:p.role,rating:p.rating,stats:stats.map(([label,value])=>({label:String(label),value:Number(value)}))}
 }
 function controlledPlayer(g:Match){
   if(g.scene==="defense")return g.players.find(p=>p.team==="user"&&p.id===(g.tackle?.id??g.aim?.actor))??nearest(g,"user",g.ball)
@@ -503,7 +505,7 @@ function PlayerStats({player,defending}:{player:StatPanelData|null;defending:boo
   return <aside className="shrink-0 border-t border-white/10 bg-[#122334] px-3 py-2 lg:w-56 lg:border-l lg:border-t-0 lg:p-4">
     <div className="mb-2 flex items-center justify-between gap-2 lg:mb-4"><p className="text-[10px] font-black uppercase tracking-widest text-cyan-300">{defending?"Selected defender":"Controlled player"}</p></div>
     {player?<><div className="flex items-center gap-3"><div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-blue-700 font-black leading-none lg:h-14 lg:w-14"><span className="text-lg lg:text-2xl">{player.rating}</span><span className="mt-1 text-[10px]">{player.role}</span></div><p className="min-w-0 break-words text-sm font-black lg:text-lg">{player.name}</p></div>
-    <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 lg:mt-5 lg:grid-cols-1 lg:gap-3">{player.stats.map(stat=><div key={stat.label} className="min-w-0"><div className="flex justify-between gap-1 text-xs font-bold"><span className="text-slate-300">{stat.label}</span><span className="tabular-nums">{stat.value}</span></div><div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${stat.value>=100?"bg-cyan-300":stat.value>=90?"bg-emerald-400":stat.value>=70?"bg-yellow-400":"bg-orange-400"}`} style={{width:`${clamp(stat.value/Math.max(110,...player.stats.map(s=>s.value))*100,0,100)}%`}}/></div></div>)}</div><p className="mt-4 hidden text-xs leading-relaxed text-slate-400 lg:block">{player.role==="GK"?"Keeper attributes affect saves, movement and distribution.":"PHY helps shield the ball. Tackles compare DEF against DRI."}</p></>:<p className="text-xs text-slate-400">Player stats appear during the next chance.</p>}
+    <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 lg:mt-5 lg:grid-cols-1 lg:gap-3">{player.stats.map(stat=><div key={stat.label} className="min-w-0"><div className="flex justify-between gap-1 text-xs font-bold"><span className="text-slate-300">{stat.label}</span><span className="tabular-nums">{stat.value}</span></div><div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${stat.value>=100?"bg-cyan-300":stat.value>=90?"bg-emerald-400":stat.value>=70?"bg-yellow-400":"bg-orange-400"}`} style={{width:`${clamp(stat.value/Math.max(110,...player.stats.map(s=>s.value))*100,0,100)}%`}}/></div></div>)}</div>{player.playStyles.length>0&&<div className="mt-3 flex flex-wrap gap-1">{player.playStyles.map(s=><span key={s} className="rounded bg-amber-400/20 px-2 py-1 text-xs text-amber-200">{styleName(s)}</span>)}</div>}<p className="mt-4 hidden text-xs leading-relaxed text-slate-400 lg:block">{player.role==="GK"?"Keeper attributes affect saves, movement and distribution.":"PHY helps shield the ball. Tackles compare DEF against DRI."}</p></>:<p className="text-xs text-slate-400">Player stats appear during the next chance.</p>}
   </aside>
 }
 type HUD = { player:StatPanelData|null; scene:Scene; minute:number; score:Record<Team,number>; message:string; events:EventItem[]; chances:Record<Team,number>; owner:string; paused:boolean; ready:boolean }
@@ -587,9 +589,9 @@ export default function ArcadePage(){
     const goalX=dir.y<-.04?p.x+dir.x*(0-p.y)/dir.y:Infinity
     const shot=dir.y<-.15&&p.y<720&&Math.abs(goalX-MID)<GOAL*.85+Math.abs(vec.curve)*150
     let d=dir,curve=curveMode?vec.curve:0
-    if(shot){d=rotate(d,rand(-1,1)*shotError(p.shooting));kick(g,p,d,700+vec.power*(690+p.shooting*3),curve,"shot")}
+    if(shot){d=rotate(d,rand(-1,1)*shotError(p.shooting)*(1-.30*style(p,"finesseShot")));kick(g,p,d,700+vec.power*(690+p.shooting*3),curve,"shot")}
     else{
-      const success=Math.random()<passChance(p.role==="GK"?(p.passing+p.kicking)/2:p.passing,.42)
+      const success=Math.random()<1-(1-passChance(p.role==="GK"?(p.passing+p.kicking)/2:p.passing,.42))*(1-.25*style(p,"incisivePass"))
       // On failure, keep the final aim straight, without curve or receiver assistance.
       if(!success)curve=0
       const speed=330+vec.power*(870+(p.role==="GK"?(p.kicking-80)*2:0))
