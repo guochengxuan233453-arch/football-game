@@ -103,6 +103,9 @@ function endChance(g, text, goal) {
     }
     for (const p of g.players)
         p.moving = false;
+    g.planning = false;
+    g.planReady = { user: false, ai: false };
+    pending.delete(g);
     g.scene = "result";
     g.message = text;
     g.phaseTime = 0;
@@ -264,7 +267,7 @@ function resolveTackle(g, def, att) {
 }
 function nearest(g, team, point, excludeGK = true) { return teamOf(g, team).filter(p => !excludeGK || p.role !== "GK").sort((a, b) => dist(a, point) - dist(b, point))[0]; }
 function queueTackle(g, def, target) { if ((g.scene !== "attack" && g.scene !== "defense") || g.cooldown > 0 || g.tackle)
-    return; const d = dist(def, target); const u = unit(target.x - def.x, target.y - def.y); g.tackle = { id: def.id, target: inside({ x: def.x + u.x * Math.min(d, 230), y: def.y + u.y * Math.min(d, 230) }) }; def.facing = Math.atan2(u.y, u.x); animate(def, "slide", .45); }
+    return; const d = dist(def, target); const u = unit(target.x - def.x, target.y - def.y); g.tackle = { id: def.id, target: inside({ x: def.x + u.x * Math.min(d, 165), y: def.y + u.y * Math.min(d, 165) }) }; def.facing = Math.atan2(u.y, u.x); animate(def, "slide", .45); }
 function offBall(g, dt) {
     const t = g.scene === "attack" ? "user" : "ai", defending = opposite(t), p = ownerOf(g);
     const flight = g.flight, receiver = g.players.find(q => q.id === flight?.target);
@@ -448,14 +451,61 @@ function createOnline(a, b) {
     if (Math.random() < .5)
         for (const e of schedule)
             e.team = opposite(e.team);
-    return { players: [...a, ...b], ball: { x: MID, y: H / 2 }, owner: null, flight: null, carry: null, tackle: null, scene: "simulation", score: { user: 0, ai: 0 }, minute: 0, schedule, next: 0, phaseTime: 0, activeTime: 0, actionCount: 0, decisions: 0, aiWait: 0, aiLast: null, aiVisits: {}, cooldown: 0, message: "Kick off", events: [], camera: { x: MID, y: H / 2 }, aim: null, paused: false, difficulty: "medium", attackRating: 0, defenseRating: 0, chanceCount: { user: 0, ai: 0 }, possessionAge: 0, lastTouch: "user", halftime: false };
+    return { planning: false, planId: 0, planTime: 0, planReady: { user: false, ai: false }, players: [...a, ...b], ball: { x: MID, y: H / 2 }, owner: null, flight: null, carry: null, tackle: null, scene: "simulation", score: { user: 0, ai: 0 }, minute: 0, schedule, next: 0, phaseTime: 0, activeTime: 0, actionCount: 0, decisions: 0, aiWait: 0, aiLast: null, aiVisits: {}, cooldown: 0, message: "Kick off", events: [], camera: { x: MID, y: H / 2 }, aim: null, paused: false, difficulty: "medium", attackRating: 0, defenseRating: 0, chanceCount: { user: 0, ai: 0 }, possessionAge: 0, lastTouch: "user", halftime: false };
 }
+// Multiplayer-only pacing. Keep simulation clocks in real seconds,
+// and scale the physics timestep uniformly to preserve trajectories and stat balance.
+const ONLINE_MOTION_SPEED = 0.70;
+const ONLINE_DECISION_SECONDS = 12;
+const ONLINE_MAX_PLANS = 8;
+const ONLINE_DRIBBLE_DISTANCE = 165;
+// Never serialize unrevealed moves: the server broadcasts Match, not this WeakMap.
+const pending = new WeakMap();
+let nextPlanId = 0;
+function beginPlan(g) {
+    if (g.decisions >= ONLINE_MAX_PLANS) {
+        endChance(g, "Chance over — move limit");
+        return;
+    }
+    g.decisions++;
+    g.planning = true;
+    g.planId = ++nextPlanId;
+    g.planTime = ONLINE_DECISION_SECONDS;
+    g.planReady = { user: false, ai: false };
+    g.tackle = null;
+    g.cooldown = 0;
+    g.possessionAge = 0;
+    pending.set(g, {});
+    for (const p of g.players)
+        p.moving = false;
+    g.message = "Choose your next move";
+}
+function resolvePlan(g) {
+    const moves = pending.get(g) ?? {}, attacking = g.scene === "attack" ? "user" : "ai", defending = opposite(attacking);
+    g.planning = false;
+    pending.delete(g);
+    const attack = moves[attacking], defense = moves[defending];
+    if (!attack) {
+        endChance(g, "Decision time expired");
+        return;
+    }
+    // Both actions are chosen from the same frozen state. A release beats a late lunge; a dribble can be challenged.
+    performAction(g, attacking, attack);
+    if (defense?.kind === "tackle") {
+        const q = g.players.find(p => p.id === defense.actor);
+        if (q)
+            queueTackle(g, q, defense.target);
+    }
+}
+const ONLINE_CHANCE_SECONDS = 50;
+const ONLINE_MINUTES_PER_SECOND = 8;
 function tickOnline(g, dt) {
+    const motionDt = dt * ONLINE_MOTION_SPEED;
     if (g.scene === "fulltime")
         return;
     for (const p of g.players) {
         if (p.actionTime > 0) {
-            p.actionTime = Math.max(0, p.actionTime - dt);
+            p.actionTime = Math.max(0, p.actionTime - motionDt);
             if (!p.actionTime)
                 p.action = null;
         }
@@ -463,7 +513,7 @@ function tickOnline(g, dt) {
     g.phaseTime += dt;
     if (g.scene === "simulation") {
         const e = g.schedule[g.next];
-        g.minute = Math.min(90, g.minute + dt * 12);
+        g.minute = Math.min(90, g.minute + dt * ONLINE_MINUTES_PER_SECOND);
         if (!g.halftime && g.minute >= 45) {
             g.halftime = true;
             g.events.unshift({ minute: 45, text: "Half time" });
@@ -472,7 +522,7 @@ function tickOnline(g, dt) {
             g.minute = e.minute;
             g.next++;
             startChance(g, e.team);
-            g.message = "Play the chance!";
+            beginPlan(g);
         }
         else if (g.minute >= 90) {
             g.scene = "fulltime";
@@ -481,7 +531,7 @@ function tickOnline(g, dt) {
         return;
     }
     if (g.scene === "result") {
-        if (g.phaseTime >= 2.1) {
+        if (g.phaseTime >= 2.5) {
             g.scene = "simulation";
             g.phaseTime = 0;
             g.message = "Match in progress";
@@ -489,29 +539,26 @@ function tickOnline(g, dt) {
         }
         return;
     }
-    g.activeTime += dt;
-    g.cooldown = Math.max(0, g.cooldown - dt);
-    if (g.activeTime > 35 || g.actionCount > 22) {
-        endChance(g, "Chance over");
-        return;
+    if (g.planning) {
+        g.planTime = Math.max(0, g.planTime - dt);
+        if (g.planTime <= 0 || (g.planReady.user && g.planReady.ai))
+            resolvePlan(g);
+        return; // No physics or chance clock advances during either player's planning window.
     }
     const p = ownerOf(g);
     if (p && !g.carry && !g.flight) {
-        g.possessionAge += dt;
-        if (g.possessionAge >= 5) {
-            endChance(g, "Decision time expired");
-            return;
-        }
-        for (const q of g.players)
-            if (q.id !== g.tackle?.id)
-                q.moving = false;
-        // The defender may still act while the attacker decides.
-        if (!g.tackle)
-            return;
+        beginPlan(g);
+        return;
+    }
+    g.activeTime += dt;
+    g.cooldown = Math.max(0, g.cooldown - motionDt);
+    if (g.activeTime > ONLINE_CHANCE_SECONDS || g.actionCount > 22) {
+        endChance(g, "Chance over");
+        return;
     }
     if (p && g.carry) {
         p.moving = true;
-        const done = move(p, g.carry, (70 + p.pace * 1.48) * (1 + .10 * (0, playStyles_1.style)(p, "quickStep")), dt);
+        const done = move(p, g.carry, (70 + p.pace * 1.48) * (1 + .10 * (0, playStyles_1.style)(p, "quickStep")), motionDt);
         setBallAtFeet(g, p);
         if (done) {
             g.carry = null;
@@ -519,7 +566,7 @@ function tickOnline(g, dt) {
         }
     }
     if (g.carry || g.flight)
-        offBall(g, dt);
+        offBall(g, motionDt);
     const current = ownerOf(g);
     if (current && current.moving && !g.tackle) {
         const q = nearest(g, opposite(current.team), current);
@@ -537,11 +584,9 @@ function tickOnline(g, dt) {
         if (!q)
             g.tackle = null;
         else {
-            const done = move(q, task.target, 580 + q.pace * 2, dt), att = ownerOf(g);
+            const done = move(q, task.target, 580 + q.pace * 2, motionDt), att = ownerOf(g);
             if (att && att.team !== q.team && dist(q, att) < R * 2 + 15)
                 resolveTackle(g, q, att);
-            else if (g.flight && dist(q, g.ball) < 35)
-                endChance(g, "Excellent interception!");
             else if (done) {
                 g.tackle = null;
                 g.cooldown = .45;
@@ -549,9 +594,9 @@ function tickOnline(g, dt) {
             }
         }
     }
-    updateFlight(g, dt);
+    updateFlight(g, motionDt);
 }
-function action(g, team, raw) {
+function performAction(g, team, raw) {
     if (!raw || typeof raw !== "object" || !(g.scene === "attack" || g.scene === "defense"))
         return false;
     const a = raw, attacking = g.scene === "attack" ? "user" : "ai", p = ownerOf(g);
@@ -588,7 +633,8 @@ function action(g, team, raw) {
         const target = point(a.target);
         if (!target || dist(p, target) < 25)
             return false;
-        g.carry = inside(target);
+        const d = unit(target.x - p.x, target.y - p.y), length = Math.min(ONLINE_DRIBBLE_DISTANCE, dist(p, target));
+        g.carry = inside({ x: p.x + d.x * length, y: p.y + d.y * length });
         g.actionCount++;
         g.message = "";
         return true;
@@ -617,4 +663,58 @@ function action(g, team, raw) {
         return true;
     }
     return false;
+}
+// Lock exactly one validated move per side and per server-generated planning ID.
+function action(g, team, raw) {
+    if (!g.planning || g.planTime <= 0 || g.planReady[team] || !raw || typeof raw !== "object")
+        return false;
+    const a = raw;
+    if (a.planId !== g.planId)
+        return false;
+    const attack = g.scene === "attack" ? "user" : "ai", p = ownerOf(g);
+    const point = (v) => { if (!v || typeof v !== "object")
+        return null; const q = v; return Number.isFinite(q.x) && Number.isFinite(q.y) && Math.abs(q.x) < W * 3 && Math.abs(q.y) < H * 3 ? { x: q.x, y: q.y } : null; };
+    let cmd;
+    if (team !== attack) {
+        if (a.kind === "hold")
+            cmd = { kind: "hold" };
+        else if (a.kind === "tackle") {
+            const q = g.players.find(q => q.id === a.actor && q.team === team && q.role !== "GK"), target = point(a.target);
+            if (!q || !target || dist(q, g.ball) > 430 || dist(q, target) < .5)
+                return false;
+            cmd = { kind: "tackle", actor: q.id, target };
+        }
+        else
+            return false;
+    }
+    else {
+        if (!p || p.team !== team || g.flight || g.carry)
+            return false;
+        if (a.kind === "pass") {
+            const q = g.players.find(q => q.id === a.target && q.team === team && q.id !== p.id);
+            if (!q)
+                return false;
+            cmd = { kind: "pass", target: q.id };
+        }
+        else if (a.kind === "dribble") {
+            const target = point(a.target);
+            if (!target || dist(p, inside(target)) < 25)
+                return false;
+            cmd = { kind: "dribble", target: inside(target) };
+        }
+        else if (a.kind === "swipe") {
+            const dir = point(a.dir), target = point(a.target);
+            if (!dir || Math.hypot(dir.x, dir.y) < .1 || typeof a.power !== "number" || !Number.isFinite(a.power) || typeof a.curve !== "number" || !Number.isFinite(a.curve))
+                return false;
+            cmd = { kind: "swipe", dir, target, power: clamp(a.power, .12, 1), curve: clamp(a.curve, -1.35, 1.35) };
+        }
+        else
+            return false;
+    }
+    const moves = pending.get(g);
+    if (!moves)
+        return false;
+    moves[team] = cmd;
+    g.planReady[team] = true;
+    return true;
 }

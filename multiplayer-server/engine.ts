@@ -11,7 +11,7 @@ type Flight = { vx: number; vy: number; curve: number; age: number; kicker: stri
 type Gesture = { start: Point; end: Point; first: Point | null; pointer: number; actor: string | null; mode: "attack" | "defend" }
 type Scene = "simulation" | "attack" | "defense" | "result" | "fulltime"
 type EventItem = { minute: number; text: string; team?: Team }
-type Match = { players: Player[]; ball: Point; owner: string | null; flight: Flight | null; carry: Point | null; tackle: { id: string; target: Point } | null; scene: Scene; score: Record<Team, number>; minute: number; schedule: { minute: number; team: Team }[]; next: number; phaseTime: number; activeTime: number; actionCount: number; decisions: number; aiWait: number; aiLast: string | null; aiVisits: Record<string, number>; cooldown: number; message: string; events: EventItem[]; camera: Point; aim: Gesture | null; paused: boolean; difficulty: Difficulty; attackRating: number; defenseRating: number; chanceCount: Record<Team, number>; possessionAge: number; lastTouch: Team; halftime: boolean }
+type Match = { planning:boolean; planId:number; planTime:number; planReady:Record<Team,boolean>; players: Player[]; ball: Point; owner: string | null; flight: Flight | null; carry: Point | null; tackle: { id: string; target: Point } | null; scene: Scene; score: Record<Team, number>; minute: number; schedule: { minute: number; team: Team }[]; next: number; phaseTime: number; activeTime: number; actionCount: number; decisions: number; aiWait: number; aiLast: string | null; aiVisits: Record<string, number>; cooldown: number; message: string; events: EventItem[]; camera: Point; aim: Gesture | null; paused: boolean; difficulty: Difficulty; attackRating: number; defenseRating: number; chanceCount: Record<Team, number>; possessionAge: number; lastTouch: Team; halftime: boolean }
 const W = 1050, H = 1600, MID = W / 2, GOAL = 270, NET = 72, R = 17, BR = 7
 const DIFFICULTIES = {
   easy: { label: "Easy", ovr: 85, reaction: 0.9, press: 0.82 },
@@ -87,7 +87,7 @@ function endChance(g:Match,text:string,goal?:Team){
   else g.events.unshift({minute:Math.floor(g.minute),text})
   if(goal){const scorer=g.players.find(p=>p.id===g.flight?.kicker&&p.team===goal);for(const p of teamOf(g,goal)){if(p.id===scorer?.id||dist(p,g.ball)<350){p.moving=false;animate(p,"celebrate",2.1)}}}
   for(const p of g.players)p.moving=false
-  g.scene="result";g.message=text;g.phaseTime=0;g.owner=null;g.flight=null;g.carry=null;g.tackle=null;g.aim=null
+  g.planning=false;g.planReady={user:false,ai:false};pending.delete(g);g.scene="result";g.message=text;g.phaseTime=0;g.owner=null;g.flight=null;g.carry=null;g.tackle=null;g.aim=null
 }
 function startChance(g:Match,team:Team){
   g.scene=team==="user"?"attack":"defense";g.phaseTime=0;g.activeTime=0;g.actionCount=0;g.decisions=0;g.aiLast=null;g.aiVisits={};g.aiWait=.8;g.cooldown=0;g.carry=null;g.tackle=null;g.aim=null;g.flight=null;g.chanceCount[team]++
@@ -162,7 +162,7 @@ function resolveTackle(g:Match,def:Player,att:Player){
   } else {g.message="Tackle missed";const away=unit(def.x-att.x,def.y-att.y);def.x=clamp(def.x+away.x*48,25,W-25);def.y=clamp(def.y+away.y*48,25,H-25)}
 }
 function nearest(g:Match,team:Team,point:Point,excludeGK=true){return teamOf(g,team).filter(p=>!excludeGK||p.role!=="GK").sort((a,b)=>dist(a,point)-dist(b,point))[0]}
-function queueTackle(g:Match,def:Player,target:Point){if((g.scene!=="attack"&&g.scene!=="defense")||g.cooldown>0||g.tackle)return;const d=dist(def,target);const u=unit(target.x-def.x,target.y-def.y);g.tackle={id:def.id,target:inside({x:def.x+u.x*Math.min(d,230),y:def.y+u.y*Math.min(d,230)})};def.facing=Math.atan2(u.y,u.x);animate(def,"slide",.45)}
+function queueTackle(g:Match,def:Player,target:Point){if((g.scene!=="attack"&&g.scene!=="defense")||g.cooldown>0||g.tackle)return;const d=dist(def,target);const u=unit(target.x-def.x,target.y-def.y);g.tackle={id:def.id,target:inside({x:def.x+u.x*Math.min(d,165),y:def.y+u.y*Math.min(d,165)})};def.facing=Math.atan2(u.y,u.x);animate(def,"slide",.45)}
 function offBall(g:Match,dt:number){
   const t:Team=g.scene==="attack"?"user":"ai", defending=opposite(t),p=ownerOf(g)
   const flight=g.flight, receiver=g.players.find(q=>q.id===flight?.target)
@@ -266,43 +266,67 @@ export function lineup(raw:unknown,team:Team):Player[]{
 export function createOnline(a:Player[],b:Player[]):Match{
   const schedule=[7,19,31,41,53,64,76,85].map((minute,i)=>({minute,team:(i%2===0?"user":"ai") as Team}))
   if(Math.random()<.5)for(const e of schedule)e.team=opposite(e.team)
-  return {players:[...a,...b],ball:{x:MID,y:H/2},owner:null,flight:null,carry:null,tackle:null,scene:"simulation",score:{user:0,ai:0},minute:0,schedule,next:0,phaseTime:0,activeTime:0,actionCount:0,decisions:0,aiWait:0,aiLast:null,aiVisits:{},cooldown:0,message:"Kick off",events:[],camera:{x:MID,y:H/2},aim:null,paused:false,difficulty:"medium",attackRating:0,defenseRating:0,chanceCount:{user:0,ai:0},possessionAge:0,lastTouch:"user",halftime:false}
+  return {planning:false,planId:0,planTime:0,planReady:{user:false,ai:false},players:[...a,...b],ball:{x:MID,y:H/2},owner:null,flight:null,carry:null,tackle:null,scene:"simulation",score:{user:0,ai:0},minute:0,schedule,next:0,phaseTime:0,activeTime:0,actionCount:0,decisions:0,aiWait:0,aiLast:null,aiVisits:{},cooldown:0,message:"Kick off",events:[],camera:{x:MID,y:H/2},aim:null,paused:false,difficulty:"medium",attackRating:0,defenseRating:0,chanceCount:{user:0,ai:0},possessionAge:0,lastTouch:"user",halftime:false}
 }
+// Multiplayer-only pacing. Keep simulation clocks in real seconds,
+// and scale the physics timestep uniformly to preserve trajectories and stat balance.
+const ONLINE_MOTION_SPEED = 0.70
+const ONLINE_DECISION_SECONDS = 12
+const ONLINE_MAX_PLANS = 8
+const ONLINE_DRIBBLE_DISTANCE = 165
+// Never serialize unrevealed moves: the server broadcasts Match, not this WeakMap.
+const pending = new WeakMap<Match,Partial<Record<Team,Record<string,unknown>>>>()
+let nextPlanId = 0
+function beginPlan(g:Match){
+  if(g.decisions>=ONLINE_MAX_PLANS){endChance(g,"Chance over — move limit");return}
+  g.decisions++;g.planning=true;g.planId=++nextPlanId;g.planTime=ONLINE_DECISION_SECONDS;g.planReady={user:false,ai:false};g.tackle=null;g.cooldown=0;g.possessionAge=0;pending.set(g,{});
+  for(const p of g.players)p.moving=false;g.message="Choose your next move"
+}
+function resolvePlan(g:Match){
+  const moves=pending.get(g)??{}, attacking:Team=g.scene==="attack"?"user":"ai", defending=opposite(attacking);
+  g.planning=false;pending.delete(g);
+  const attack=moves[attacking],defense=moves[defending];
+  if(!attack){endChance(g,"Decision time expired");return}
+  // Both actions are chosen from the same frozen state. A release beats a late lunge; a dribble can be challenged.
+  performAction(g,attacking,attack);
+  if(defense?.kind==="tackle") {const q=g.players.find(p=>p.id===defense.actor);if(q)queueTackle(g,q,defense.target as Point)}
+}
+const ONLINE_CHANCE_SECONDS = 50
+const ONLINE_MINUTES_PER_SECOND = 8
 export function tickOnline(g:Match,dt:number){
+  const motionDt=dt*ONLINE_MOTION_SPEED
   if(g.scene==="fulltime")return
-  for(const p of g.players){if(p.actionTime>0){p.actionTime=Math.max(0,p.actionTime-dt);if(!p.actionTime)p.action=null}}
+  for(const p of g.players){if(p.actionTime>0){p.actionTime=Math.max(0,p.actionTime-motionDt);if(!p.actionTime)p.action=null}}
   g.phaseTime+=dt
   if(g.scene==="simulation"){
-    const e=g.schedule[g.next];g.minute=Math.min(90,g.minute+dt*12)
+    const e=g.schedule[g.next];g.minute=Math.min(90,g.minute+dt*ONLINE_MINUTES_PER_SECOND)
     if(!g.halftime&&g.minute>=45){g.halftime=true;g.events.unshift({minute:45,text:"Half time"})}
-    if(e&&g.minute>=e.minute){g.minute=e.minute;g.next++;startChance(g,e.team);g.message="Play the chance!"}
+    if(e&&g.minute>=e.minute){g.minute=e.minute;g.next++;startChance(g,e.team);beginPlan(g)}
     else if(g.minute>=90){g.scene="fulltime";g.message="Full time"}return
   }
-  if(g.scene==="result"){if(g.phaseTime>=2.1){g.scene="simulation";g.phaseTime=0;g.message="Match in progress";g.ball={x:MID,y:H/2}}return}
-  g.activeTime+=dt;g.cooldown=Math.max(0,g.cooldown-dt)
-  if(g.activeTime>35||g.actionCount>22){endChance(g,"Chance over");return}
-  const p=ownerOf(g)
-  if(p&&!g.carry&&!g.flight){
-    g.possessionAge+=dt
-    if(g.possessionAge>=5){endChance(g,"Decision time expired");return}
-    for(const q of g.players)if(q.id!==g.tackle?.id)q.moving=false
-    // The defender may still act while the attacker decides.
-    if(!g.tackle)return
+  if(g.scene==="result"){if(g.phaseTime>=2.5){g.scene="simulation";g.phaseTime=0;g.message="Match in progress";g.ball={x:MID,y:H/2}}return}
+  if(g.planning){
+    g.planTime=Math.max(0,g.planTime-dt);
+    if(g.planTime<=0||(g.planReady.user&&g.planReady.ai))resolvePlan(g);
+    return // No physics or chance clock advances during either player's planning window.
   }
-  if(p&&g.carry){p.moving=true;const done=move(p,g.carry,(70+p.pace*1.48)*(1+.10*style(p,"quickStep")),dt);setBallAtFeet(g,p);if(done){g.carry=null;g.possessionAge=0}}
-  if(g.carry||g.flight)offBall(g,dt)
+  const p=ownerOf(g)
+  if(p&&!g.carry&&!g.flight){beginPlan(g);return}
+  g.activeTime+=dt;g.cooldown=Math.max(0,g.cooldown-motionDt)
+  if(g.activeTime>ONLINE_CHANCE_SECONDS||g.actionCount>22){endChance(g,"Chance over");return}
+  if(p&&g.carry){p.moving=true;const done=move(p,g.carry,(70+p.pace*1.48)*(1+.10*style(p,"quickStep")),motionDt);setBallAtFeet(g,p);if(done){g.carry=null;g.possessionAge=0}}
+  if(g.carry||g.flight)offBall(g,motionDt)
   const current=ownerOf(g)
   if(current&&current.moving&&!g.tackle){const q=nearest(g,opposite(current.team),current);if(q&&dist(q,current)<R*2+9){if(shoulderContact(current,q))resolveShoulder(g,q,current);else resolveTackle(g,q,current)}}
   if(g.scene!=="attack"&&g.scene!=="defense")return
   if(g.tackle){const task=g.tackle,q=g.players.find(z=>z.id===task.id);if(!q)g.tackle=null;else{
-    const done=move(q,task.target,580+q.pace*2,dt),att=ownerOf(g)
+    const done=move(q,task.target,580+q.pace*2,motionDt),att=ownerOf(g)
     if(att&&att.team!==q.team&&dist(q,att)<R*2+15)resolveTackle(g,q,att)
-    else if(g.flight&&dist(q,g.ball)<35)endChance(g,"Excellent interception!")
     else if(done){g.tackle=null;g.cooldown=.45;g.message="Tackle missed"}
   }}
-  updateFlight(g,dt)
+  updateFlight(g,motionDt)
 }
-export function action(g:Match,team:Team,raw:unknown){
+function performAction(g:Match,team:Team,raw:unknown){
   if(!raw||typeof raw!=="object"||!(g.scene==="attack"||g.scene==="defense"))return false
   const a=raw as Record<string,unknown>,attacking=g.scene==="attack"?"user":"ai",p=ownerOf(g)
   const point=(v:unknown):Point|null=>{if(!v||typeof v!=="object")return null;const q=v as Point;return Number.isFinite(q.x)&&Number.isFinite(q.y)&&Math.abs(q.x)<W*3&&Math.abs(q.y)<H*3?{x:q.x,y:q.y}:null}
@@ -310,7 +334,7 @@ export function action(g:Match,team:Team,raw:unknown){
   if(!p||p.team!==team||g.flight)return false
   if(a.kind==="cancel"){if(!g.carry)return false;g.carry=null;p.moving=false;g.possessionAge=0;return true}
   if(a.kind==="pass"){const q=g.players.find(q=>q.id===a.target&&q.team===team&&q.id!==p.id);if(!q)return false;pass(g,p,q);return true}
-  if(a.kind==="dribble"){const target=point(a.target);if(!target||dist(p,target)<25)return false;g.carry=inside(target);g.actionCount++;g.message="";return true}
+  if(a.kind==="dribble"){const target=point(a.target);if(!target||dist(p,target)<25)return false;const d=unit(target.x-p.x,target.y-p.y),length=Math.min(ONLINE_DRIBBLE_DISTANCE,dist(p,target));g.carry=inside({x:p.x+d.x*length,y:p.y+d.y*length});g.actionCount++;g.message="";return true}
   if(a.kind==="swipe"){
     const v=point(a.dir);if(!v||Math.hypot(v.x,v.y)<.1||typeof a.power!=="number"||!Number.isFinite(a.power)||typeof a.curve!=="number"||!Number.isFinite(a.curve))return false
     let d=unit(v.x,v.y),curve=clamp(a.curve,-1.35,1.35);const power=clamp(a.power,.12,1),goalY=team==="user"?0:H,goalX=d.y*forward(team)>.04?p.x+d.x*(goalY-p.y)/d.y:Infinity
@@ -319,4 +343,32 @@ export function action(g:Match,team:Team,raw:unknown){
     else{const success=Math.random()<1-(1-passChance(p.role==="GK"?(p.passing+p.kicking)/2:p.passing,.42))*(1-.25*style(p,"incisivePass"));if(!success)curve=0;const end=point(a.target)??{x:p.x+d.x*300,y:p.y+d.y*300};const receiver=teamOf(g,team).filter(q=>q.id!==p.id&&dist(q,end)<175&&((q.x-p.x)*d.x+(q.y-p.y)*d.y)>40).sort((q,r)=>dist(q,end)-dist(r,end))[0];kick(g,p,d,330+power*(870+(p.role==="GK"?(p.kicking-80)*2:0)),curve,"pass",success?receiver?.id??null:null);if(!success)g.message="Poor pass — no curve"}
     return true
   }return false
+}
+
+// Lock exactly one validated move per side and per server-generated planning ID.
+export function action(g:Match,team:Team,raw:unknown){
+  if(!g.planning||g.planTime<=0||g.planReady[team]||!raw||typeof raw!=="object")return false;
+  const a=raw as Record<string,unknown>;if(a.planId!==g.planId)return false;
+  const attack:Team=g.scene==="attack"?"user":"ai",p=ownerOf(g);
+  const point=(v:unknown):Point|null=>{if(!v||typeof v!=="object")return null;const q=v as Point;return Number.isFinite(q.x)&&Number.isFinite(q.y)&&Math.abs(q.x)<W*3&&Math.abs(q.y)<H*3?{x:q.x,y:q.y}:null};
+  let cmd:Record<string,unknown>;
+  if(team!==attack){
+    if(a.kind==="hold")cmd={kind:"hold"};
+    else if(a.kind==="tackle"){
+      const q=g.players.find(q=>q.id===a.actor&&q.team===team&&q.role!=="GK"),target=point(a.target);
+      if(!q||!target||dist(q,g.ball)>430||dist(q,target)<.5)return false;
+      cmd={kind:"tackle",actor:q.id,target};
+    }else return false;
+  }else{
+    if(!p||p.team!==team||g.flight||g.carry)return false;
+    if(a.kind==="pass"){
+      const q=g.players.find(q=>q.id===a.target&&q.team===team&&q.id!==p.id);if(!q)return false;cmd={kind:"pass",target:q.id};
+    }else if(a.kind==="dribble"){
+      const target=point(a.target);if(!target||dist(p,inside(target))<25)return false;cmd={kind:"dribble",target:inside(target)};
+    }else if(a.kind==="swipe"){
+      const dir=point(a.dir),target=point(a.target);if(!dir||Math.hypot(dir.x,dir.y)<.1||typeof a.power!=="number"||!Number.isFinite(a.power)||typeof a.curve!=="number"||!Number.isFinite(a.curve))return false;
+      cmd={kind:"swipe",dir,target,power:clamp(a.power,.12,1),curve:clamp(a.curve,-1.35,1.35)};
+    }else return false;
+  }
+  const moves=pending.get(g);if(!moves)return false;moves[team]=cmd;g.planReady[team]=true;return true;
 }
